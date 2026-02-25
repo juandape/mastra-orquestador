@@ -3,9 +3,17 @@
   "version": "1.0.0",
   "description": "Orquestador de agentes independientes para proyectos React/React Native",
   "main": "src/index.js",
+  "files": [
+    "src/",
+    "agents/",
+    "utils/",
+    "workflows/",
+    "README.md"
+  ],
   "scripts": {
     "start": "node src/index.js",
-    "test": "jest --coverage"
+    "test": "jest --coverage",
+    "prepare": "echo 'Preparando para publicar en npm...'"
   },
   "keywords": [
     "mastra",
@@ -14,8 +22,16 @@
     "react-native",
     "agentes"
   ],
-  "author": "",
+  "author": "Juan Peña <juan.pena@email.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/juandape/mastra-orquestador.git"
+  },
+  "homepage": "https://github.com/juandape/mastra-orquestador#readme",
+  "bugs": {
+    "url": "https://github.com/juandape/mastra-orquestador/issues"
+  },
   "dependencies": {
     "axios": "^1.6.0"
   },
