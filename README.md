@@ -26,17 +26,36 @@ Este proyecto permite orquestar agentes independientes para automatizar y evalua
 
 ## Requisitos
 
-- Node.js >= 18
-- Acceso a los archivos del proyecto React/React Native
-
 ## Instalación
 
+Puedes usar **npm** o **yarn**:
+
 ```sh
+# Con npm
 cd mastra-orquestador
 npm install
+# O con yarn
+yarn install
 ```
 
-## Ejecución
+````
+```sh
+# Con npm
+npm start
+# O con yarn
+yarn start
+````
+
+## Arquitectura Hexagonal
+
+El orquestador sigue una arquitectura hexagonal (Ports & Adapters):
+
+- **/agents**: lógica de negocio (dominio)
+- **/workflows**: orquestación (aplicación)
+- **/utils**: adaptadores y utilidades
+- **/src**: punto de entrada y configuración
+
+Esto permite desacoplar la lógica de los agentes de las integraciones externas y facilita pruebas y mantenibilidad.
 
 ```sh
 npm start

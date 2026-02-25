@@ -18,7 +18,9 @@ module.exports.analizarProyecto = async function analizarProyecto() {
     // Analizar estructura de carpetas típica
     const srcPath = path.resolve(process.cwd(), '../src');
     if (fs.existsSync(srcPath)) {
-      const carpetas = fs.readdirSync(srcPath).filter(f => fs.statSync(path.join(srcPath, f)).isDirectory());
+      const carpetas = fs
+        .readdirSync(srcPath)
+        .filter((f) => fs.statSync(path.join(srcPath, f)).isDirectory());
       console.log('Carpetas en src:', carpetas);
     } else {
       console.log('No se encontró carpeta src.');

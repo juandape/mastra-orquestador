@@ -13,7 +13,9 @@ module.exports.revisarHistorias = async function revisarHistorias() {
       console.log(`Descripción: ${h.descripcion || h.description}`);
     });
   } else {
-    console.log('No se encontró stories.json. Agrega tus historias de usuario en ese archivo.');
+    console.log(
+      'No se encontró stories.json. Agrega tus historias de usuario en ese archivo.',
+    );
   }
   console.log('Revisión de historias completa.');
 };

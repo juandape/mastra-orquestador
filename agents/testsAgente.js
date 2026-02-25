@@ -4,7 +4,10 @@ const { execSync } = require('child_process');
 module.exports.ejecutarTests = async function ejecutarTests() {
   console.log('Ejecutando tests unitarios...');
   try {
-    const output = execSync('npm test -- --coverage --json --outputFile=coverage.json', { stdio: 'pipe' }).toString();
+    const output = execSync(
+      'npm test -- --coverage --json --outputFile=coverage.json',
+      { stdio: 'pipe' },
+    ).toString();
     const coverage = require('../../coverage/coverage-summary.json');
     const pct = coverage.total.statements.pct;
     console.log(`Cobertura de statements: ${pct}%`);

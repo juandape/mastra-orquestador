@@ -9,13 +9,30 @@ module.exports.integrarHerramientas = async function integrarHerramientas() {
   if (fs.existsSync(indexPath)) {
     let html = fs.readFileSync(indexPath, 'utf8');
     if (!html.includes('<!-- KATALON_TAG -->')) {
-      html = html.replace('</head>', '<!-- KATALON_TAG --><script src="https://cdn.katalon.com/agent.js"></script>\n</head>');
+      html = html.replace(
+        '</head>',
+        '<!-- KATALON_TAG --><script src="https://cdn.katalon.com/agent.js"></script>\n</head>',
+      );
     }
     if (!html.includes('<!-- APPSFLYER_TAG -->')) {
-      html = html.replace('</head>', '<!-- APPSFLYER_TAG --><script src="https://cdn.appsflyer.com/agent.js"></script>\n</head>');
+      html = html.replace(
+        '</head>',
+        '<!-- APPSFLYER_TAG --><script src="https://cdn.appsflyer.com/agent.js"></script>\n</head>',
+      );
     }
     if (!html.includes('<!-- GA_TAG -->')) {
-      html = html.replace('</head>', '<!-- GA_TAG --><script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>\n<script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'GA_MEASUREMENT_ID');</script>\n</head>');
+      html = html.replace(
+        '</head>',
+        `<!-- GA_TAG -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'GA_MEASUREMENT_ID');
+</script>
+</head>`,
+      );
     }
     fs.writeFileSync(indexPath, html, 'utf8');
     console.log('Tags insertados en public/index.html');
