@@ -1,0 +1,25 @@
+{
+  "name": "mastra-orquestador",
+  "version": "1.0.0",
+  "description": "Orquestador de agentes independientes para proyectos React/React Native",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "jest --coverage"
+  },
+  "keywords": [
+    "mastra",
+    "orquestador",
+    "react",
+    "react-native",
+    "agentes"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0"
+  }
+}
