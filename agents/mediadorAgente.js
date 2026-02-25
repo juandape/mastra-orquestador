@@ -82,14 +82,19 @@ module.exports.ejecutarMediador = async function ejecutarMediador() {
   await historiasAgente.revisarHistorias();
   await pantallasAgente.crearPantallas();
   await testsAgente.ejecutarTests();
+  // Ejecutar integraciones automáticamente y mostrar resultado
+  console.log(
+    '\nEjecutando integración de Katalon, Appsflyer y Google Analytics...',
+  );
   await integracionesAgente.integrarHerramientas();
   await sonarqubeAgente.validarSonarQube();
 
   // 4. Mostrar resumen
   console.log('\n--- RESULTADOS GENERADOS ---');
   console.log('Pantallas generadas en src/screens');
+  console.log('Integraciones aplicadas en public/index.html');
   console.log(
-    'Integraciones y análisis completados. Revisa la consola y carpetas para más detalles.',
+    'Análisis y tests completados. Revisa la consola y carpetas para más detalles.',
   );
   rl.close();
 };
