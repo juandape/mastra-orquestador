@@ -1,61 +1,94 @@
 # Mastra Orquestador de Agentes para Proyectos React/React Native
 
-Este proyecto permite orquestar agentes independientes para automatizar y evaluar actividades clave en proyectos de React y React Native, sin importar el framework utilizado.
+Este orquestador automatiza y evalúa actividades clave en proyectos React/React Native usando agentes inteligentes y flujos Mastra. Es independiente del framework (CRA, Next.js, Expo, etc.) y puede adaptarse a cualquier estructura de proyecto.
 
-## Características principales
+## ¿Qué automatiza este orquestador?
 
-- Análisis independiente del proyecto actual
-- Revisión de historias de usuario
-- Creación de pantallas según historias y Figma
-- Tests unitarios con cobertura >83%
-- Implementación de Katalon, Appsflyer y Google Analytics
-- Revisión e implementación de integraciones API
+- Análisis de la estructura y dependencias del proyecto
+- Revisión y mejora de historias de usuario
+- Generación de pantallas/componentes React a partir de historias y Figma
+- Ejecución de tests unitarios y verificación de cobertura (>83%)
+- Integración automática de Katalon, AppsFlyer y Google Analytics
+- Análisis de calidad y seguridad con SonarQube y npm audit
 
-## Estructura sugerida
+## Estructura del proyecto
 
-- `/agents`: Lógica de agentes independientes
-- `/workflows`: Orquestación y flujos de trabajo
-- `/utils`: Utilidades compartidas
+- `/agents`: scripts legacy (no se usan si usas Mastra, solo referencia)
+- `/src/mastra/agents`: agentes Mastra (TypeScript)
+- `/src/mastra/workflows`: flujos Mastra
+- `/src/mastra/tools`: herramientas auxiliares
+- `/src/index.ts`: entry point CLI
+- `/utils`: utilidades compartidas
 
-## Uso en cualquier proyecto React/React Native
+## ¿Cómo usarlo en cualquier proyecto React/React Native?
 
-1. Clona o copia este orquestador en tu proyecto.
-2. Configura los agentes según tus necesidades (ver `/agents`).
-3. Ejecuta los flujos desde `/workflows` según el análisis o tarea requerida.
-4. Integra los resultados en tu pipeline de desarrollo.
+### 1. Instala el orquestador
 
-## Requisitos
-
-## Instalación
-
-Puedes usar **npm** o **yarn**:
+Clona o copia la carpeta `mastra-orquestador` dentro de tu proyecto:
 
 ```sh
-# Con npm
+git clone <repo-url> mastra-orquestador
+# o copia la carpeta manualmente
+```
+
+### 2. Instala dependencias
+
+```sh
 cd mastra-orquestador
 npm install
-# O con yarn
+# o
 yarn install
 ```
 
-````
-```sh
-# Con npm
-npm start
-# O con yarn
-yarn start
-````
+### 3. Configura los agentes y herramientas
 
-## Arquitectura Hexagonal
+Edita los archivos en `/src/mastra/agents` y `/src/mastra/tools` para personalizar reglas, prompts o integraciones según tu stack.
+
+### 4. Ejecuta el orquestador
+
+Desde la raíz del orquestador:
+
+```sh
+npm start
+# o
+yarn start
+```
+
+El CLI te pedirá:
+
+- Ruta absoluta del proyecto a analizar
+- Descripción de la funcionalidad a implementar
+- Historias de usuario (en texto, JSON o Markdown)
+- (Opcional) Imagen de Figma
+
+### 5. Integra los resultados
+
+El orquestador ejecuta el siguiente flujo:
+
+1. **Análisis del proyecto**: estructura y dependencias
+2. **Revisión de historias de usuario**
+3. **Generación de pantallas/componentes**
+4. **Ejecución de tests y cobertura**
+5. **Integraciones (Katalon, AppsFlyer, Google Analytics)**
+6. **Análisis de calidad y seguridad (SonarQube, npm audit)**
+
+Al finalizar, tendrás un resumen de seguridad y recomendaciones. Puedes adaptar cada paso editando los agentes o el workflow.
+
+## Requisitos
+
+- Node.js >= 18
+- Acceso a la carpeta del proyecto React/React Native
+
+## Arquitectura
 
 El orquestador sigue una arquitectura hexagonal (Ports & Adapters):
 
-- **/agents**: lógica de negocio (dominio)
-- **/workflows**: orquestación (aplicación)
+- **/src/mastra/agents**: lógica de negocio (dominio)
+- **/src/mastra/workflows**: orquestación (aplicación)
 - **/utils**: adaptadores y utilidades
 - **/src**: punto de entrada y configuración
 
-Esto permite desacoplar la lógica de los agentes de las integraciones externas y facilita pruebas y mantenibilidad.
+Esto desacopla la lógica de los agentes de las integraciones externas y facilita pruebas y mantenibilidad.
 
 ```sh
 npm start
@@ -63,9 +96,10 @@ npm start
 
 ## Personalización
 
-- Modifica los agentes en `/agents` para adaptarlos a tus reglas o herramientas.
-- Agrega integraciones en `/utils` según tus necesidades.
+- Modifica los agentes en `/src/mastra/agents` para adaptarlos a tus reglas o herramientas.
+- Agrega o edita herramientas en `/src/mastra/tools`.
+- Cambia el flujo en `/src/mastra/workflows/orquestadorWorkflow.ts` si necesitas pasos adicionales.
 
 ---
 
-> **Nota:** Este orquestador es independiente del framework (CRA, Next.js, Expo, etc.) y puede adaptarse a cualquier estructura de proyecto React/React Native.
+> **Nota:** Los scripts legacy en `/agents` ya no se usan directamente. Toda la lógica debe estar en `/src/mastra/agents` y el workflow.
