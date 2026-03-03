@@ -31,6 +31,18 @@ export {
 export { MODELOS_DISPONIBLES, cargarEnv, preguntar } from './setup.js';
 export type { ModelOption } from './setup.js';
 
+// ── Modelo IA (fábrica multi-proveedor) ───────────────────────────────────────
+export {
+  getModelInstance,
+  getProviderActivo,
+  PROVIDER_CONFIGS,
+} from './mastra/model.js';
+export type { AIProvider, ProviderConfig } from './mastra/model.js';
+
+// ── Escritura segura de archivos (protección de código en producción) ─────────
+export { writeFileSafe } from './mastra/utils/safeFileWriter.js';
+export type { WriteMode, WriteResult } from './mastra/utils/safeFileWriter.js';
+
 export {
   analizarEstructuraTool,
   buscarImplementacionesSimilaresTool,

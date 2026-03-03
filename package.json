@@ -69,10 +69,14 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.53",
+    "@ai-sdk/google": "^3.0.36",
+    "@ai-sdk/groq": "^3.0.27",
     "@ai-sdk/openai": "^1.1.9",
     "@mastra/core": "^0.7.0",
     "axios": "^1.6.0",
     "dotenv": "^16.4.5",
+    "ollama-ai-provider": "^1.2.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {

@@ -2,6 +2,7 @@ import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
+import { writeFileSafe } from '../utils/safeFileWriter.js';
 
 const CATALON_TAG = `<!-- KATALON_TAG --><script src="https://cdn.katalon.com/agent.js"></script>`;
 const APPSFLYER_TAG = `<!-- APPSFLYER_TAG --><script src="https://cdn.appsflyer.com/agent.js"></script>`;
@@ -60,7 +61,14 @@ export const insertarTagsIntegracionTool = createTool({
       googleAnalytics = true;
     }
 
-    fs.writeFileSync(indexPath, html, 'utf8');
+    // ── Escritura segura: crea backup antes de modificar index.html ─────────
+    // mode 'backup-overwrite': guarda copia .bak.{timestamp} y luego escribe
+    const writeResult = writeFileSafe(
+      indexPath,
+      html,
+      'backup-overwrite',
+      proyectoPath,
+    );
 
     const insertados = [
       katalon ? 'Katalon' : null,
@@ -68,14 +76,20 @@ export const insertarTagsIntegracionTool = createTool({
       googleAnalytics ? 'Google Analytics' : null,
     ].filter(Boolean);
 
+    const mensajeBase =
+      insertados.length > 0
+        ? `Tags insertados: ${insertados.join(', ')}`
+        : 'Todos los tags ya estaban presentes.';
+
+    const mensajeBackup = writeResult.backupPath
+      ? `\n🔒 Backup del index.html original guardado en:\n   ${writeResult.backupPath}`
+      : '';
+
     return {
       katalon,
       appsflyer,
       googleAnalytics,
-      mensaje:
-        insertados.length > 0
-          ? `Tags insertados: ${insertados.join(', ')}`
-          : 'Todos los tags ya estaban presentes.',
+      mensaje: mensajeBase + mensajeBackup,
     };
   },
 });

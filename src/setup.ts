@@ -23,6 +23,7 @@ export interface ModelOption {
 }
 
 export const MODELOS_DISPONIBLES: ModelOption[] = [
+  // ── OpenAI ──────────────────────────────────────────────────────────────────
   {
     id: 1,
     model: 'gpt-4o',
@@ -31,7 +32,7 @@ export const MODELOS_DISPONIBLES: ModelOption[] = [
     label: 'GPT-4o',
     tag: '⭐  Recomendado',
     description:
-      'El más capaz. Ideal para código complejo y diseños detallados.',
+      'El más capaz de OpenAI. Ideal para código complejo y diseños detallados.',
     docsUrl: 'https://platform.openai.com/api-keys',
   },
   {
@@ -53,6 +54,104 @@ export const MODELOS_DISPONIBLES: ModelOption[] = [
     tag: '🚀  Potente',
     description: 'Gran ventana de contexto. Ideal para proyectos muy grandes.',
     docsUrl: 'https://platform.openai.com/api-keys',
+  },
+  // ── Anthropic ───────────────────────────────────────────────────────────────
+  {
+    id: 4,
+    model: 'claude-3-5-sonnet-20241022',
+    provider: 'anthropic',
+    envVar: 'ANTHROPIC_API_KEY',
+    label: 'Claude 3.5 Sonnet',
+    tag: '🧠  Muy capaz',
+    description:
+      'Excelente en razonamiento y código. Alternativa líder a GPT-4.',
+    docsUrl: 'https://console.anthropic.com/settings/keys',
+  },
+  {
+    id: 5,
+    model: 'claude-3-5-haiku-20241022',
+    provider: 'anthropic',
+    envVar: 'ANTHROPIC_API_KEY',
+    label: 'Claude 3.5 Haiku',
+    tag: '⚡  Rápido',
+    description:
+      'Velocidad máxima con buena calidad. Ideal para respuestas rápidas.',
+    docsUrl: 'https://console.anthropic.com/settings/keys',
+  },
+  // ── Google Gemini ────────────────────────────────────────────────────────────
+  {
+    id: 6,
+    model: 'gemini-2.0-flash',
+    provider: 'google',
+    envVar: 'GOOGLE_GENERATIVE_AI_API_KEY',
+    label: 'Gemini 2.0 Flash',
+    tag: '🌐  Google',
+    description: 'Modelo más reciente de Google. Rápido con gran contexto.',
+    docsUrl: 'https://aistudio.google.com/app/apikey',
+  },
+  {
+    id: 7,
+    model: 'gemini-1.5-pro',
+    provider: 'google',
+    envVar: 'GOOGLE_GENERATIVE_AI_API_KEY',
+    label: 'Gemini 1.5 Pro',
+    tag: '🌐  Google Pro',
+    description: 'Máxima capacidad de Google con 1M tokens de contexto.',
+    docsUrl: 'https://aistudio.google.com/app/apikey',
+  },
+  // ── Groq (open-source, ultra rápido) ─────────────────────────────────────────
+  {
+    id: 8,
+    model: 'llama-3.3-70b-versatile',
+    provider: 'groq',
+    envVar: 'GROQ_API_KEY',
+    label: 'Llama 3.3 70B',
+    tag: '🦙  Open Source',
+    description:
+      'Llama en infraestructura Groq. Velocidad extrema, tier gratuito disponible.',
+    docsUrl: 'https://console.groq.com/keys',
+  },
+  {
+    id: 9,
+    model: 'mixtral-8x7b-32768',
+    provider: 'groq',
+    envVar: 'GROQ_API_KEY',
+    label: 'Mixtral 8x7B',
+    tag: '🦙  Open Source',
+    description: 'Mixtral MoE vía Groq. Buena relación calidad/velocidad.',
+    docsUrl: 'https://console.groq.com/keys',
+  },
+  // ── Ollama (local, sin API Key) ──────────────────────────────────────────────────────
+  {
+    id: 10,
+    model: 'llama3.2',
+    provider: 'ollama',
+    envVar: '',
+    label: 'Llama 3.2 (local)',
+    tag: '🏠  Local / Gratis',
+    description: 'Corre en tu máquina con Ollama. Sin costos, sin internet.',
+    docsUrl: 'https://ollama.com/download',
+  },
+  {
+    id: 11,
+    model: 'qwen2.5-coder',
+    provider: 'ollama',
+    envVar: '',
+    label: 'Qwen 2.5 Coder (local)',
+    tag: '🏠  Local / Código',
+    description:
+      'Especializado en generación de código. Excelente para componentes React.',
+    docsUrl: 'https://ollama.com/library/qwen2.5-coder',
+  },
+  {
+    id: 12,
+    model: 'deepseek-r1',
+    provider: 'ollama',
+    envVar: '',
+    label: 'DeepSeek R1 (local)',
+    tag: '🏠  Local / Razonamiento',
+    description: 'Razonamiento avanzado tipo o1. Requiere máquina potente.',
+    docsUrl: 'https://ollama.com/library/deepseek-r1',
   },
 ];
 
@@ -100,6 +199,21 @@ function estaConfigurado(): boolean {
   for (const [k, v] of Object.entries(env)) {
     if (!process.env[k]) process.env[k] = v;
   }
+
+  // Compatibilidad con configuración nueva (AI_PROVIDER + AI_MODEL)
+  if (process.env.AI_PROVIDER && process.env.AI_MODEL) {
+    const config = MODELOS_DISPONIBLES.find(
+      (m) =>
+        m.provider === process.env.AI_PROVIDER &&
+        m.model === process.env.AI_MODEL,
+    );
+    // Proveedores locales (Ollama) no requieren API Key
+    if (config?.envVar === '') return true;
+    const apiKeyVar = config?.envVar;
+    return !!(apiKeyVar && process.env[apiKeyVar]);
+  }
+
+  // Retrocompatibilidad: configuración antigua solo OpenAI
   return !!(process.env.OPENAI_API_KEY && process.env.OPENAI_MODEL);
 }
 
@@ -127,16 +241,24 @@ export async function runSetup(rl: readline.Interface): Promise<void> {
   // ── 1. Elegir modelo ────────────────────────────────────────────────────────
   console.log('🤖  ¿Qué modelo de IA quieres usar?\n');
 
-  for (const m of MODELOS_DISPONIBLES) {
-    console.log(`   ${m.id}.  ${m.label.padEnd(16)}${m.tag}`);
-    console.log(`       ${m.description}\n`);
+  // Agrupar por proveedor para mejor lectura (SRP visual)
+  const proveedores = [...new Set(MODELOS_DISPONIBLES.map((m) => m.provider))];
+  for (const proveedor of proveedores) {
+    console.log(`   ── ${proveedor.toUpperCase()} ──`);
+    for (const m of MODELOS_DISPONIBLES.filter(
+      (x) => x.provider === proveedor,
+    )) {
+      console.log(`   ${String(m.id).padEnd(3)} ${m.label.padEnd(22)}${m.tag}`);
+      console.log(`       ${m.description}\n`);
+    }
   }
 
+  const total = MODELOS_DISPONIBLES.length;
   let modelo = MODELOS_DISPONIBLES[0];
   while (true) {
     const raw = await preguntar(
       rl,
-      '   Escribe el número (1-3) y presiona Enter [1 por defecto]: ',
+      `   Escribe el número (1-${total}) y presiona Enter [1 por defecto]: `,
     );
     const n = raw === '' ? 1 : parseInt(raw, 10);
     const found = MODELOS_DISPONIBLES.find((m) => m.id === n);
@@ -144,27 +266,42 @@ export async function runSetup(rl: readline.Interface): Promise<void> {
       modelo = found;
       break;
     }
-    console.log('   ⚠️  Por favor escribe 1, 2 o 3.\n');
+    console.log(`   ⚠️  Por favor escribe un número entre 1 y ${total}.\n`);
   }
 
   console.log(`\n   ✅  Seleccionaste: ${modelo.label}\n`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
-  // ── 2. API Key ──────────────────────────────────────────────────────────────
-  if (!process.env[modelo.envVar]) {
+  // ── 2. API Key (se omite para proveedores locales como Ollama) ─────────────
+  if (modelo.envVar === '') {
+    // ── Ollama u otro proveedor local: preguntar base URL opcionalmente ─────
+    console.log('🏠  Ollama corre localmente — no necesitas API Key.');
+    console.log('');
+    console.log('   Asegúrate de tener Ollama instalado y corriendo:');
+    console.log(`   👉  ${modelo.docsUrl}`);
+    console.log(`   👉  ollama pull ${modelo.model}\n`);
+    const baseUrl = await preguntar(
+      rl,
+      '   URL base de Ollama [http://localhost:11434]: ',
+    );
+    const urlFinal = baseUrl || 'http://localhost:11434';
+    escribirEnvVar('OLLAMA_BASE_URL', urlFinal);
+    process.env.OLLAMA_BASE_URL = urlFinal;
+    console.log(`\n   ✅  Ollama configurado en: ${urlFinal}\n`);
+  } else if (!process.env[modelo.envVar]) {
+    const proveedorNombre =
+      modelo.provider.charAt(0).toUpperCase() + modelo.provider.slice(1);
     console.log(
-      `🔑  Para usar ${modelo.label} necesitas una API Key de OpenAI.`,
+      `🔑  Para usar ${modelo.label} necesitas una API Key de ${proveedorNombre}.`,
     );
     console.log('');
-    console.log(
-      '   Si aún no tienes una, créala aquí (es gratis registrarse):',
-    );
+    console.log('   Si aún no tienes una, créala aquí:');
     console.log(`   👉  ${modelo.docsUrl}\n`);
     console.log('   Una vez que la tengas, pégala aquí abajo.\n');
 
     let apiKey = '';
     while (!apiKey) {
-      apiKey = await preguntar(rl, '   Pega tu OPENAI_API_KEY: ');
+      apiKey = await preguntar(rl, `   Pega tu ${modelo.envVar}: `);
       if (!apiKey) {
         console.log(
           '   ⚠️  La API Key no puede estar vacía. Inténtalo de nuevo.\n',
@@ -179,9 +316,18 @@ export async function runSetup(rl: readline.Interface): Promise<void> {
     console.log(`   ✅  API Key encontrada en el entorno.\n`);
   }
 
-  // ── 3. Guardar modelo ───────────────────────────────────────────────────────
-  escribirEnvVar('OPENAI_MODEL', modelo.model);
-  process.env.OPENAI_MODEL = modelo.model;
+  // ── 3. Guardar proveedor y modelo ───────────────────────────────────────────
+  // Nuevas vars (multi-proveedor)
+  escribirEnvVar('AI_PROVIDER', modelo.provider);
+  escribirEnvVar('AI_MODEL', modelo.model);
+  process.env.AI_PROVIDER = modelo.provider;
+  process.env.AI_MODEL = modelo.model;
+
+  // Retrocompatibilidad: mantener OPENAI_MODEL si el proveedor es OpenAI
+  if (modelo.provider === 'openai') {
+    escribirEnvVar('OPENAI_MODEL', modelo.model);
+    process.env.OPENAI_MODEL = modelo.model;
+  }
 
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('');
