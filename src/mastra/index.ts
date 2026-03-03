@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { Mastra } from '@mastra/core';
 
 import { analisisAgente } from './agents/analisisAgente.js';
@@ -10,7 +9,8 @@ import { sonarqubeAgente } from './agents/sonarqubeAgente.js';
 import { mediadorAgente } from './agents/mediadorAgente.js';
 import { orquestadorWorkflow } from './workflows/orquestadorWorkflow.js';
 
-export const mastra = new Mastra({
+// Widened type annotation to avoid TS2742 (inferred type referencing internal dist files)
+export const mastra: Mastra = new Mastra({
   agents: {
     'analisis-agente': analisisAgente,
     'historias-agente': historiasAgente,
@@ -23,4 +23,4 @@ export const mastra = new Mastra({
   workflows: {
     'orquestador-workflow': orquestadorWorkflow,
   },
-});
+}) as Mastra;

@@ -2,13 +2,50 @@
   "name": "mastra-orquestador",
   "version": "2.0.0",
   "description": "Orquestador de agentes IA con Mastra para proyectos React/React Native",
-  "main": "dist/index.js",
+  "main": "dist/lib.js",
+  "types": "dist/lib.d.ts",
   "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/lib.js",
+      "types": "./dist/lib.d.ts"
+    },
+    "./cli": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./agents": {
+      "import": "./dist/mastra/agents/index.js",
+      "types": "./dist/mastra/agents/index.d.ts"
+    },
+    "./tools": {
+      "import": "./dist/mastra/tools/index.js",
+      "types": "./dist/mastra/tools/index.d.ts"
+    },
+    "./workflows": {
+      "import": "./dist/mastra/workflows/orquestadorWorkflow.js",
+      "types": "./dist/mastra/workflows/orquestadorWorkflow.d.ts"
+    },
+    "./setup": {
+      "import": "./dist/setup.js",
+      "types": "./dist/setup.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "bin": {
+    "mastra-orquestador": "./dist/index.js"
+  },
   "scripts": {
     "dev": "tsx src/index.ts",
-    "build": "tsc",
+    "build": "tsc --project tsconfig.json && chmod +x dist/index.js",
     "start": "node dist/index.js",
-    "mastra:dev": "mastra dev"
+    "prepublishOnly": "npm run build",
+    "mastra:dev": "mastra dev",
+    "type-check": "tsc --noEmit"
   },
   "keywords": [
     "mastra",
@@ -27,6 +64,9 @@
   "homepage": "https://github.com/juandape/mastra-orquestador#readme",
   "bugs": {
     "url": "https://github.com/juandape/mastra-orquestador/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.1.9",

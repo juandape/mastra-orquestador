@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // ── Schemas compartidos ────────────────────────────────────────────────────────
 
-const historiasSchema = z.array(
+export const historiasSchema = z.array(
   z.object({
     titulo: z.string(),
     descripcion: z.string().optional(),
@@ -15,17 +15,17 @@ const historiasSchema = z.array(
 const analisisStep = createStep({
   id: 'analizar-proyecto',
   description:
-    'Analiza la estructura y dependencias del proyecto React/React Native.',
+    'Analiza la estructura, dependencias y scripts del proyecto React/React Native.',
   inputSchema: z.object({
     proyectoPath: z.string().describe('Ruta absoluta al proyecto a analizar'),
-    funcionalidad: z
+    historiasRaw: z
       .string()
-      .describe('Descripción de la funcionalidad a implementar'),
+      .describe('Historia de usuario o descripción de la funcionalidad'),
   }),
   outputSchema: z.object({
     resumenAnalisis: z.string(),
     proyectoPath: z.string(),
-    funcionalidad: z.string(),
+    historiasRaw: z.string(),
   }),
   execute: async (ctx) => {
     const input = ctx.context.inputData;
@@ -34,15 +34,22 @@ const analisisStep = createStep({
     if (!agent) throw new Error('analisis-agente no encontrado');
     const result = await agent.generate(
       `Analiza el proyecto en "${input.proyectoPath}".
-      El desarrollador quiere implementar: "${input.funcionalidad}".
-      1. Usa la herramienta analizarEstructura para obtener dependencias y carpetas.
-      2. Usa buscarImplementaciones para buscar código relacionado con "${input.funcionalidad}".
-      3. Resume los hallazgos.`,
+El usuario quiere implementar lo siguiente:
+"""
+${input.historiasRaw}
+"""
+
+Por favor:
+1. Usa la herramienta analizarEstructura para obtener dependencias, scripts disponibles y carpetas.
+2. Identifica el framework y la estructura del proyecto.
+3. Usa buscarImplementaciones para buscar código relacionado con el tema de la historia.
+4. Indica si el proyecto tiene script "standards" (para verificar estándares de código).
+5. Resume los hallazgos de forma concisa.`,
     );
     return {
       resumenAnalisis: result.text,
       proyectoPath: input.proyectoPath,
-      funcionalidad: input.funcionalidad,
+      historiasRaw: input.historiasRaw,
     };
   },
 });
@@ -51,14 +58,12 @@ const analisisStep = createStep({
 
 const historiasStep = createStep({
   id: 'revisar-historias',
-  description: 'Revisa y mejora las historias de usuario proporcionadas.',
+  description:
+    'Revisa, mejora y estructura las historias de usuario proporcionadas.',
   inputSchema: z.object({
     resumenAnalisis: z.string(),
     proyectoPath: z.string(),
-    funcionalidad: z.string(),
-    historiasRaw: z
-      .string()
-      .describe('Historias de usuario en JSON, Markdown o texto plano'),
+    historiasRaw: z.string().describe('Historia de usuario en texto libre'),
   }),
   outputSchema: z.object({
     resumenHistorias: z.string(),
@@ -71,18 +76,22 @@ const historiasStep = createStep({
     const agent = mastra?.getAgent('historias-agente');
     if (!agent) throw new Error('historias-agente no encontrado');
     const result = await agent.generate(
-      `Revisa y analiza las siguientes historias de usuario:
+      `Revisa y estructura la siguiente historia de usuario:
 
+"""
 ${input.historiasRaw}
+"""
 
 Contexto del proyecto: ${input.resumenAnalisis}
 
 Por favor:
-1. Extrae todas las historias en formato estructurado.
-2. Evalúa su calidad y completitud.
-3. Sugiere mejoras si son necesarias.
-4. Devuelve al final un JSON con el array de historias: [{"titulo": "...", "descripcion": "..."}]`,
+1. Reformula en formato "Como [rol], quiero [acción] para [beneficio]" si no está así.
+2. Evalúa calidad y completitud.
+3. Si hay varias pantallas/funcionalidades, divídelas en historias separadas.
+4. Devuelve al final un JSON con el array de historias:
+   [{"titulo": "Nombre de la pantalla", "descripcion": "Descripción detallada"}]`,
     );
+
     let historias: Array<{ titulo: string; descripcion?: string }> = [];
     try {
       const jsonMatch = result.text.match(/\[[\s\S]*\]/);
@@ -90,10 +99,12 @@ Por favor:
         historias = JSON.parse(jsonMatch[0]);
       }
     } catch {
+      // Fallback: crear una sola historia con el texto original
       historias = [
-        { titulo: input.funcionalidad, descripcion: input.historiasRaw },
+        { titulo: 'Nueva funcionalidad', descripcion: input.historiasRaw },
       ];
     }
+
     return {
       resumenHistorias: result.text,
       historias,
@@ -106,7 +117,8 @@ Por favor:
 
 const pantallasStep = createStep({
   id: 'generar-pantallas',
-  description: 'Genera los componentes React para cada historia de usuario.',
+  description:
+    'Genera los componentes React para cada historia de usuario, adaptados al framework del proyecto.',
   inputSchema: z.object({
     resumenHistorias: z.string(),
     historias: historiasSchema,
@@ -125,20 +137,22 @@ const pantallasStep = createStep({
     if (!agent) throw new Error('pantallas-agente no encontrado');
     const historiasStr = JSON.stringify(input.historias, null, 2);
     const imagenInfo = input.imagenFigma
-      ? `Imagen de Figma proporcionada: ${input.imagenFigma.substring(0, 100)}...`
-      : 'No se proporcionó imagen de Figma.';
+      ? `Diseño de referencia proporcionado: ${input.imagenFigma.substring(0, 120)}`
+      : 'No se proporcionó diseño de referencia.';
     const result = await agent.generate(
-      `Genera las pantallas React para las siguientes historias de usuario:
+      `Genera los componentes React para las siguientes historias de usuario:
 
 ${historiasStr}
 
 Proyecto en: ${input.proyectoPath}
 ${imagenInfo}
 
-Usa la herramienta generarPantallas con:
-${input.imagenFigma ? `- imagenFigma: "${input.imagenFigma}"` : ''}
-
-Después describe brevemente cada componente generado.`,
+Instrucciones:
+- Usa la herramienta generarPantallas para crear los archivos reales.
+  ${input.imagenFigma ? `- Pasa imagenFigma: "${input.imagenFigma}"` : ''}
+- Adapta los componentes al framework detectado en el análisis (React, Next.js, Expo, etc.).
+- Sigue las convenciones de carpetas del proyecto.
+- Después describe brevemente cada componente generado.`,
     );
     return {
       resumenPantallas: result.text,
@@ -148,13 +162,55 @@ Después describe brevemente cada componente generado.`,
   },
 });
 
-// ── Step 4: Tests y cobertura ─────────────────────────────────────────────────
+// ── Step 4: Verificación de estándares de código ──────────────────────────────
+
+const standardsStep = createStep({
+  id: 'verificar-standards',
+  description:
+    'Ejecuta el script "standards" del proyecto si existe, para verificar estándares frontend.',
+  inputSchema: z.object({
+    resumenPantallas: z.string(),
+    proyectoPath: z.string(),
+    historias: historiasSchema,
+  }),
+  outputSchema: z.object({
+    resumenStandards: z.string(),
+    proyectoPath: z.string(),
+    historias: historiasSchema,
+  }),
+  execute: async (ctx) => {
+    const input = ctx.context.inputData;
+    const mastra = ctx.mastra;
+    const agent = mastra?.getAgent('analisis-agente');
+    if (!agent) throw new Error('analisis-agente no encontrado');
+    const result = await agent.generate(
+      `Verifica los estándares de código del proyecto en "${input.proyectoPath}".
+
+Usa la herramienta ejecutarStandards con proyectoPath: "${input.proyectoPath}".
+
+Basándote en los resultados:
+1. Si no existe el script "standards", indícalo claramente y sugiere cómo podría agregarse.
+2. Si existe y pasó sin errores, confirma que el código cumple los estándares.
+3. Si existe pero hay errores, lista los problemas encontrados y cómo solucionarlos.
+
+Componentes recién generados para tener en cuenta:
+${input.historias.map((h: { titulo: string }) => `- ${h.titulo}`).join('\n')}`,
+    );
+    return {
+      resumenStandards: result.text,
+      proyectoPath: input.proyectoPath,
+      historias: input.historias,
+    };
+  },
+});
+
+// ── Step 5: Tests y cobertura ─────────────────────────────────────────────────
 
 const testsStep = createStep({
   id: 'ejecutar-tests',
   description: 'Ejecuta tests unitarios y verifica la cobertura de código.',
   inputSchema: z.object({
-    resumenPantallas: z.string(),
+    resumenStandards: z.string(),
     proyectoPath: z.string(),
     historias: historiasSchema,
   }),
@@ -173,10 +229,11 @@ const testsStep = createStep({
 Usa la herramienta ejecutarTests con proyectoPath: "${input.proyectoPath}".
 
 Basándote en los resultados:
-1. Reporta el porcentaje de cobertura.
-2. Indica si cumple el umbral del 83%.
-3. Si no cumple, sugiere qué pantallas o componentes recién generados necesitan tests:
-${input.historias.map((h: any) => `- ${h.titulo}`).join('\n')}`,
+1. Reporta el porcentaje de cobertura de statements.
+2. Indica si cumple el umbral mínimo del 83%.
+3. Si no cumple, sugiere qué componentes recién generados necesitan tests:
+${input.historias.map((h: { titulo: string }) => `   - ${h.titulo}`).join('\n')}
+4. Proporciona ejemplos concretos de tests que se deberían escribir.`,
     );
     return {
       resumenTests: result.text,
@@ -185,7 +242,7 @@ ${input.historias.map((h: any) => `- ${h.titulo}`).join('\n')}`,
   },
 });
 
-// ── Step 5: Integraciones ─────────────────────────────────────────────────────
+// ── Step 6: Integraciones ─────────────────────────────────────────────────────
 
 const integracionesStep = createStep({
   id: 'aplicar-integraciones',
@@ -208,7 +265,10 @@ const integracionesStep = createStep({
 
 Usa la herramienta insertarTags con proyectoPath: "${input.proyectoPath}".
 
-Explica qué tags se insertaron y las configuraciones necesarias para cada herramienta.`,
+Luego explica:
+1. Qué tags se insertaron (o si ya existían).
+2. Cómo configurar el GA_MEASUREMENT_ID correcto.
+3. Cualquier configuración adicional necesaria para cada herramienta.`,
     );
     return {
       resumenIntegraciones: result.text,
@@ -217,7 +277,7 @@ Explica qué tags se insertaron y las configuraciones necesarias para cada herra
   },
 });
 
-// ── Step 6: SonarQube y seguridad ─────────────────────────────────────────────
+// ── Step 7: SonarQube y seguridad ─────────────────────────────────────────────
 
 const sonarqubeStep = createStep({
   id: 'validar-seguridad',
@@ -239,9 +299,13 @@ const sonarqubeStep = createStep({
     const result = await agent.generate(
       `Realiza el análisis de calidad de código y seguridad para el proyecto en "${input.proyectoPath}".
 
-1. Usa la herramienta sonarScanner para ejecutar SonarQube (si está disponible).
+1. Usa la herramienta sonarScanner para ejecutar SonarQube (si está disponible y configurado).
 2. Usa la herramienta npmAudit para detectar vulnerabilidades en dependencias.
-3. Presenta un informe priorizado con los hallazgos y recomendaciones.`,
+3. Presenta un informe priorizado con los hallazgos:
+   - Críticos (deben resolverse antes de producción)
+   - Altos
+   - Medios y bajos
+4. Para cada problema crítico, proporciona la solución recomendada.`,
     );
     return {
       resumenSeguridad: result.text,
@@ -258,29 +322,86 @@ export const orquestadorWorkflow = new Workflow({
     proyectoPath: z
       .string()
       .describe('Ruta absoluta al proyecto React/React Native'),
-    funcionalidad: z
-      .string()
-      .describe('Descripción de la funcionalidad a implementar'),
     historiasRaw: z
       .string()
-      .describe('Historias de usuario en JSON, Markdown o texto plano'),
+      .describe(
+        'Historia de usuario o descripción de la funcionalidad a implementar',
+      ),
     imagenFigma: z
       .string()
       .optional()
-      .describe('URL, base64 o ruta de la imagen de Figma (opcional)'),
+      .describe(
+        'URL, base64 o ruta local de la imagen de diseño de Figma (opcional)',
+      ),
   }),
   result: {
     schema: z.object({
       resumenSeguridad: z.string(),
       proyectoPath: z.string(),
     }),
+    mapping: {
+      resumenSeguridad: { step: sonarqubeStep, path: 'resumenSeguridad' },
+      proyectoPath: { step: sonarqubeStep, path: 'proyectoPath' },
+    },
   },
-  steps: [
-    analisisStep,
-    historiasStep,
-    pantallasStep,
-    testsStep,
-    integracionesStep,
-    sonarqubeStep,
-  ],
 });
+
+orquestadorWorkflow
+  // Step 1: Análisis — lee proyecto y contexto de la historia
+  .step(analisisStep, {
+    variables: {
+      proyectoPath: { step: 'trigger' as const, path: 'proyectoPath' },
+      historiasRaw: { step: 'trigger' as const, path: 'historiasRaw' },
+    },
+  })
+  // Step 2: Historias — estructura y mejora la historia de usuario
+  .then(historiasStep, {
+    variables: {
+      resumenAnalisis: { step: analisisStep, path: 'resumenAnalisis' },
+      proyectoPath: { step: analisisStep, path: 'proyectoPath' },
+      historiasRaw: { step: analisisStep, path: 'historiasRaw' },
+    },
+  })
+  // Step 3: Pantallas — genera componentes (mezcla trigger + step → cast)
+  .then(pantallasStep, {
+    variables: {
+      resumenHistorias: { step: historiasStep, path: 'resumenHistorias' },
+      historias: { step: historiasStep, path: 'historias' },
+      proyectoPath: { step: historiasStep, path: 'proyectoPath' },
+      imagenFigma: { step: 'trigger' as const, path: 'imagenFigma' },
+    } as any,
+  })
+  // Step 4: Standards — verifica estándares si el proyecto los tiene
+  .then(standardsStep, {
+    variables: {
+      resumenPantallas: { step: pantallasStep, path: 'resumenPantallas' },
+      proyectoPath: { step: pantallasStep, path: 'proyectoPath' },
+      historias: { step: pantallasStep, path: 'historias' },
+    },
+  })
+  // Step 5: Tests — ejecuta tests y verifica cobertura
+  .then(testsStep, {
+    variables: {
+      resumenStandards: { step: standardsStep, path: 'resumenStandards' },
+      proyectoPath: { step: standardsStep, path: 'proyectoPath' },
+      historias: { step: standardsStep, path: 'historias' },
+    },
+  })
+  // Step 6: Integraciones — agrega tags de Katalon, AppsFlyer, GA
+  .then(integracionesStep, {
+    variables: {
+      resumenTests: { step: testsStep, path: 'resumenTests' },
+      proyectoPath: { step: testsStep, path: 'proyectoPath' },
+    },
+  })
+  // Step 7: Seguridad — SonarQube + npm audit
+  .then(sonarqubeStep, {
+    variables: {
+      resumenIntegraciones: {
+        step: integracionesStep,
+        path: 'resumenIntegraciones',
+      },
+      proyectoPath: { step: integracionesStep, path: 'proyectoPath' },
+    },
+  })
+  .commit();

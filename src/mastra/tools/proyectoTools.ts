@@ -2,11 +2,12 @@ import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 
 export const analizarEstructuraTool = createTool({
   id: 'analizar-estructura-proyecto',
   description:
-    'Lee el package.json y la estructura de carpetas de un proyecto React/React Native para obtener dependencias y directorios.',
+    'Lee el package.json y la estructura de carpetas de un proyecto React/React Native para obtener dependencias, directorios y scripts disponibles.',
   inputSchema: z.object({
     proyectoPath: z
       .string()
@@ -17,6 +18,9 @@ export const analizarEstructuraTool = createTool({
     dependencias: z.array(z.string()),
     devDependencies: z.array(z.string()),
     carpetas: z.array(z.string()),
+    scripts: z.record(z.string()),
+    tieneStandards: z.boolean(),
+    framework: z.string(),
   }),
   execute: async ({ context }) => {
     const { proyectoPath } = context;
@@ -25,6 +29,9 @@ export const analizarEstructuraTool = createTool({
     let dependencias: string[] = [];
     let devDependencies: string[] = [];
     let carpetas: string[] = [];
+    let scripts: Record<string, string> = {};
+    let tieneStandards = false;
+    let framework = 'desconocido';
 
     const pkgPath = path.join(proyectoPath, 'package.json');
     if (fs.existsSync(pkgPath)) {
@@ -32,6 +39,20 @@ export const analizarEstructuraTool = createTool({
       nombre = pkg.name || 'Desconocido';
       dependencias = Object.keys(pkg.dependencies || {});
       devDependencies = Object.keys(pkg.devDependencies || {});
+      scripts = pkg.scripts || {};
+      tieneStandards = !!scripts['standards'];
+
+      // Detectar framework
+      const allDeps = [...dependencias, ...devDependencies];
+      if (allDeps.includes('react-native') || allDeps.includes('expo')) {
+        framework = allDeps.includes('expo')
+          ? 'Expo (React Native)'
+          : 'React Native';
+      } else if (allDeps.includes('next')) {
+        framework = 'Next.js';
+      } else if (allDeps.includes('react')) {
+        framework = allDeps.includes('vite') ? 'React + Vite' : 'React (CRA)';
+      }
     }
 
     const srcPath = path.join(proyectoPath, 'src');
@@ -41,7 +62,15 @@ export const analizarEstructuraTool = createTool({
         .filter((f) => fs.statSync(path.join(srcPath, f)).isDirectory());
     }
 
-    return { nombre, dependencias, devDependencies, carpetas };
+    return {
+      nombre,
+      dependencias,
+      devDependencies,
+      carpetas,
+      scripts,
+      tieneStandards,
+      framework,
+    };
   },
 });
 
@@ -97,5 +126,75 @@ export const buscarImplementacionesSimilaresTool = createTool({
     }
 
     return { resultados };
+  },
+});
+
+// ── Ejecutar script de standards ──────────────────────────────────────────────
+
+export const ejecutarStandardsTool = createTool({
+  id: 'ejecutar-standards',
+  description:
+    'Verifica si el proyecto tiene un script "standards" en package.json y lo ejecuta para comprobar estándares de código frontend. Si no existe el script, lo indica sin error.',
+  inputSchema: z.object({
+    proyectoPath: z
+      .string()
+      .describe('Ruta absoluta al directorio raíz del proyecto'),
+  }),
+  outputSchema: z.object({
+    tieneStandards: z.boolean(),
+    exito: z.boolean(),
+    salida: z.string(),
+    error: z.string().optional(),
+  }),
+  execute: async ({ context }) => {
+    const { proyectoPath } = context;
+    const pkgPath = path.join(proyectoPath, 'package.json');
+
+    if (!fs.existsSync(pkgPath)) {
+      return {
+        tieneStandards: false,
+        exito: false,
+        salida: 'No se encontró package.json en el proyecto.',
+      };
+    }
+
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    const tieneStandards = !!pkg.scripts?.standards;
+
+    if (!tieneStandards) {
+      return {
+        tieneStandards: false,
+        exito: true,
+        salida:
+          'El proyecto no tiene un script "standards" en package.json. ' +
+          'No se ejecutó verificación de estándares de código.',
+      };
+    }
+
+    try {
+      const salida = execSync('npm run standards', {
+        cwd: proyectoPath,
+        stdio: 'pipe',
+        encoding: 'utf8',
+        timeout: 120_000,
+      });
+      return {
+        tieneStandards: true,
+        exito: true,
+        salida: salida || 'Script "standards" ejecutado sin errores.',
+      };
+    } catch (e: unknown) {
+      const err = e as any;
+      const output: string = err.stdout ?? '';
+      const stderr: string = err.stderr ?? '';
+      const combined = [output, stderr].filter(Boolean).join('\n');
+      return {
+        tieneStandards: true,
+        exito: false,
+        salida:
+          'El script "standards" encontró problemas de estándares de código.',
+        error: combined || String(e),
+      };
+    }
   },
 });
