@@ -1,5 +1,5 @@
 {
-  "name": "mastra-orquestador",
+  "name": "hu-orquestador",
   "version": "2.0.0",
   "description": "Orquestador de agentes IA con Mastra para proyectos React/React Native",
   "main": "dist/lib.js",
