@@ -12,126 +12,196 @@ Librería de agentes IA con Mastra que automatiza las tareas de desarrollo en pr
 6. **Agrega** tags de Katalon, AppsFlyer y Google Analytics
 7. **Audita** seguridad con SonarQube y npm audit
 
-## Uso como CLI (la forma más fácil)
+## Usar los agentes desde el chat de GitHub Copilot (sin publicar en npm)
 
-```sh
-# Ejecutar sin instalar nada
-npx mastra-orquestador
+> Esta es la forma más sencilla si ya tienes el proyecto clonado localmente y quieres
+> usar los agentes directamente desde el chat de VS Code, en cualquier otro proyecto tuyo.
 
-# O instalar globalmente
-npm install -g mastra-orquestador
-mastra-orquestador
-```
+### ¿Qué es esto y para qué sirve?
 
-**No necesitas configurar nada antes.** El CLI te guía paso a paso:
+Este proyecto incluye un **servidor MCP** (Model Context Protocol). Piénsalo como un
+"traductor" entre el chat de GitHub Copilot y los agentes de IA de este proyecto.
+Una vez configurado, puedes escribir en el chat de Copilot cosas como:
 
-1. Te pregunta qué modelo de IA quieres usar (con opciones claras)
-2. Te pide tu API Key de OpenAI y la guarda automáticamente en `.env`
-3. Te pide tu historia de usuario en texto libre
-4. Te pide (opcionalmente) una imagen de diseño de Figma u otro editor
-5. Detecta automáticamente tu proyecto en la carpeta actual (o te deja especificar otra)
-6. Ejecuta todos los pasos y te muestra un resumen completo
+> _"Usa el mediador-agente para generar la pantalla de login de mi app"_
 
-> **Primer uso**: se mostrará el asistente de configuración. Las siguientes veces arranca directamente.
+...y el agente se encargará de analizar tu proyecto, generar los componentes, los tests
+y todo lo demás — sin que tengas que ejecutar ningún comando adicional.
 
-## Instalación como librería
+---
 
-```sh
-npm install mastra-orquestador
-```
+### Requisitos previos
 
-### Configurar variables de entorno
+Antes de empezar, asegúrate de tener instalado:
 
-```sh
-# .env de tu proyecto
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o    # opcional — el CLI te ayuda a elegirlo
-```
+- [Node.js 18 o superior](https://nodejs.org/) — puedes verificarlo con `node -v` en la terminal
+- [VS Code](https://code.visualstudio.com/) con la extensión **GitHub Copilot** activa
+- Una cuenta con acceso a GitHub Copilot (el plan gratuito sirve)
 
-> La librería **no inicializa dotenv** por sí sola. Llama a `cargarEnv()` antes de importar los agentes, o carga las vars con tu mecanismo habitual (Next.js lo hace automáticamente).
+---
 
-## Uso programático
+### Paso 1 — Clonar y configurar este proyecto
 
-```typescript
-import { cargarEnv, mastra, orquestadorWorkflow } from 'mastra-orquestador';
-
-// Carga el .env local antes de iniciar los agentes
-cargarEnv();
-
-// Ejecutar el flujo completo
-const workflow = mastra.getWorkflow('orquestador-workflow');
-const run = workflow.createRun();
-
-const result = await run.start({
-  triggerData: {
-    proyectoPath: '/ruta/absoluta/a/mi-app',
-    historiasRaw: `
-      Como usuario quiero poder iniciar sesión con Google
-      para acceder a mi cuenta de forma segura y rápida.
-      La pantalla debe mostrar el logo de la app, un campo
-      de email y un botón "Continuar con Google".
-    `,
-    imagenFigma: 'https://figma.com/... (opcional)',
-  },
-});
-
-console.log(result.result?.resumenSeguridad);
-```
-
-## Uso de agentes individualmente
-
-```typescript
-import { mediadorAgente, analisisAgente } from 'mastra-orquestador';
-
-// Chat con el mediador
-const respuesta = await mediadorAgente.generate(
-  '¿Qué pasos debo seguir para implementar autenticación?'
-);
-console.log(respuesta.text);
-
-// Analizar un proyecto específico
-const analisis = await analisisAgente.generate(
-  'Analiza el proyecto en /home/user/mi-app y busca implementaciones de "auth"'
-);
-console.log(analisis.text);
-```
-
-## Sub-paths disponibles
-
-```typescript
-// Todos los exports (recomendado)
-import { mastra, mediadorAgente, orquestadorWorkflow } from 'mastra-orquestador';
-
-// Solo agentes
-import { analisisAgente, historiasAgente } from 'mastra-orquestador/agents';
-
-// Solo herramientas
-import { analizarEstructuraTool } from 'mastra-orquestador/tools';
-
-// Solo el workflow
-import { orquestadorWorkflow } from 'mastra-orquestador/workflows';
-```
-
-## Uso como CLI (desarrollo local)
-
-Clona el repositorio y ejecuta directamente:
-
-```sh
+```bash
+# 1. Clona el repositorio en tu máquina
 git clone https://github.com/juandape/mastra-orquestador.git
+
+# 2. Entra a la carpeta
 cd mastra-orquestador
+
+# 3. Instala las dependencias
 npm install
-cp .env.example .env        # completa OPENAI_API_KEY
-npm run dev                  # modo interactivo CLI
-npm run mastra:dev           # playground visual de Mastra
 ```
+
+---
+
+### Paso 2 — Configurar tu API Key de IA
+
+Los agentes necesitan una clave de acceso a un modelo de IA para poder generar código.
+La más fácil de obtener es la de OpenAI:
+
+1. Ve a [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+2. Crea una cuenta (si no tienes) y genera una nueva API Key
+3. Crea un archivo llamado `.env` dentro de la carpeta `mastra-orquestador` con este contenido:
+
+```bash
+# .env
+AI_PROVIDER=openai
+AI_MODEL=gpt-4o
+OPENAI_API_KEY=sk-...tu-clave-aqui...
+```
+
+> **¿Qué es una API Key?** Es como una contraseña que le dice al modelo de IA
+> "esta persona tiene permiso para usarme". Nunca la compartas con nadie.
+
+> **¿Quieres usar otro proveedor?** También puedes usar Anthropic (Claude), Google (Gemini)
+> o Groq. Cambia `AI_PROVIDER` y `AI_MODEL`, y agrega la API Key correspondiente:
+> `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY` o `GROQ_API_KEY`.
+
+---
+
+### Paso 3 — Abrir ambos proyectos en VS Code
+
+Para que el chat de Copilot pueda acceder a los agentes Y a tu proyecto al mismo tiempo,
+debes tener los dos abiertos en la misma ventana de VS Code:
+
+1. Abre VS Code
+2. Ve a **File → Open Folder...** y abre la carpeta `mastra-orquestador`
+3. Ve a **File → Add Folder to Workspace...** y agrega la carpeta de tu proyecto
+   (por ejemplo: `blupersonasapp`)
+4. Guarda el workspace: **File → Save Workspace As...**
+   (guárdalo con un nombre como `mi-workspace.code-workspace`)
+
+La próxima vez solo abres ese archivo `.code-workspace` y tendrás los dos proyectos listos.
+
+---
+
+### Paso 4 — Verificar que el servidor MCP está activo
+
+Cuando abres el workspace, VS Code detecta automáticamente el archivo `.vscode/mcp.json`
+y arrancar el servidor de agentes en segundo plano.
+
+Para confirmar que está funcionando:
+
+1. Abre la paleta de comandos: `Cmd + Shift + P`
+2. Escribe: `MCP: List Servers`
+3. Debe aparecer `mastra-orquestador` con estado **Running**
+
+Si no aparece o dice "Stopped":
+
+1. En la misma paleta: `MCP: Restart Server`
+2. Selecciona `mastra-orquestador`
+
+---
+
+### Paso 5 — Abrir el chat de Copilot en modo Agent
+
+1. Abre el chat de Copilot: `Cmd + Shift + I`
+2. En la parte inferior del chat busca el selector de modo y elige **"Agent"**
+   (no "Ask" ni "Edit" — debe decir exactamente "Agent")
+
+> **¿Por qué modo Agent?** Es el único modo donde Copilot puede llamar herramientas
+> externas como los agentes de este proyecto.
+
+---
+
+### Paso 6 — Enviar tu solicitud con la historia de usuario
+
+Ya tienes todo listo. Escribe en el chat algo como esto:
+
+```
+Usa el mediador-agente con la siguiente información:
+
+Historia de usuario:
+Como usuario quiero ver la pantalla de perfil donde pueda
+editar mi nombre, foto y correo electrónico.
+
+Imagen de diseño: [arrastra tu imagen de Figma directamente al chat]
+
+Ruta del proyecto: /Users/tu-usuario/Projects/blupersonasapp
+```
+
+> **¿Cómo sé la ruta de mi proyecto?** Abre una terminal dentro de la carpeta
+> de tu proyecto y ejecuta `pwd`. Copia y pega el resultado.
+
+---
+
+### ¿Qué pasará después de enviar?
+
+El `mediador-agente` coordinará automáticamente todos los demás agentes en orden:
+
+```
+1. Análisis del proyecto     → entiende la estructura de tu app
+2. Revisión de la historia   → refina y organiza lo que pediste
+3. Generación de pantallas   → crea los componentes React/React Native
+4. Tests                     → genera y verifica pruebas automáticas
+5. Integraciones             → agrega analytics si aplica
+6. Seguridad                 → revisa vulnerabilidades con SonarQube
+```
+
+Al final recibirás un **resumen completo** con:
+
+- Los archivos nuevos creados directamente en tu proyecto (`src/screens/`)
+- Las propuestas de cambios en archivos existentes en una carpeta `_staging/`
+  (para que los revises antes de aplicarlos manualmente)
+
+> **¿Por qué hay una carpeta `_staging/`?** Los agentes nunca modifican código que
+> ya existe en producción sin que lo revises primero. Es una medida de seguridad.
+
+---
+
+### Agentes disponibles en el chat
+
+Si quieres hablar con un agente específico en lugar del mediador general, puedes
+pedírselo directamente al chat:
+
+| Agente                 | Para qué sirve                                     |
+| ---------------------- | -------------------------------------------------- |
+| `mediador-agente`      | Coordinador general — úsalo para el flujo completo |
+| `analisis-agente`      | Solo analizar la estructura de un proyecto         |
+| `historias-agente`     | Mejorar o desglosar una historia de usuario        |
+| `pantallas-agente`     | Solo generar componentes de pantallas              |
+| `tests-agente`         | Solo generar tests para un componente              |
+| `integraciones-agente` | Configurar Katalon, AppsFlyer o Google Analytics   |
+| `sonarqube-agente`     | Revisar seguridad y calidad del código             |
+
+Ejemplo de uso directo:
+
+```
+Usa el historias-agente para desglosar esta épica en historias más pequeñas:
+"Como usuario quiero gestionar mi perfil completo"
+```
+
+---
+
+## Desarrollo local
 
 ## Estructura del proyecto
 
 ```
 src/
-├── lib.ts                    ← Entry point de librería (exporta todo)
-├── index.ts                  ← Entry point CLI (modo interactivo)
-├── setup.ts                  ← Wizard de configuración (modelo + API Key)
+├── mcp-server.ts             ← Servidor MCP (punto de entrada principal)
+├── setup.ts                  ← Carga de variables de entorno (.env)
 └── mastra/
     ├── index.ts              ← Instancia Mastra
     ├── agents/
@@ -166,36 +236,13 @@ src/
 | 6    | `aplicar-integraciones` | Inserta tags de Katalon, AppsFlyer y Google Analytics    |
 | 7    | `validar-seguridad`     | SonarQube + npm audit                                    |
 
-## Modelos de IA disponibles
-
-El CLI te permite elegir en el primer uso:
-
-| #   | Modelo        | Descripción                    |
-| --- | ------------- | ------------------------------ |
-| 1   | `gpt-4o`      | ⭐ Recomendado — el más capaz  |
-| 2   | `gpt-4o-mini` | 💰 Económico — rápido y barato |
-| 3   | `gpt-4-turbo` | 🚀 Potente — gran contexto     |
-
-Todos requieren una `OPENAI_API_KEY`. Obtenla en https://platform.openai.com/api-keys
-
-## Publicar en npm
-
-```sh
-npm run build   # compila a dist/ y aplica chmod +x al CLI
-npm publish     # prepublishOnly ejecuta build automáticamente
-```
-
 ## Arquitectura
 
-- **`src/setup.ts`** — wizard de configuración: selección de modelo y guardado de API Key
-- **`src/lib.ts`** — entry point de librería: re-exporta agents, tools, workflow y utils de setup
+- **`src/mcp-server.ts`** — servidor MCP: expone los 7 agentes como herramientas para el chat de Copilot
+- **`src/setup.ts`** — carga las variables de entorno del `.env` antes de inicializar los agentes
 - **`src/mastra/agents`** — lógica de cada agente IA
+- **`src/mastra/model.ts`** — fábrica de modelos: resuelve qué proveedor usar según el `.env`
 - **`src/mastra/workflows`** — orquestación con `.step().then().commit()`
 - **`src/mastra/tools`** — adaptadores a sistemas externos (fs, execSync, axios)
-- **`src/index.ts`** — CLI interactivo con UX guiada paso a paso
 
-- Cambia el flujo en `/src/mastra/workflows/orquestadorWorkflow.ts` si necesitas pasos adicionales.
-
----
-
-> **Nota:** Los scripts legacy en `/agents` ya no se usan directamente. Toda la lógica debe estar en `/src/mastra/agents` y el workflow.
+Para cambiar el flujo, edita `src/mastra/workflows/orquestadorWorkflow.ts`.
