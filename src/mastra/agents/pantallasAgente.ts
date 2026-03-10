@@ -51,6 +51,86 @@ PRINCIPIOS OBLIGATORIOS — aplícalos en cada componente que generes:
   - Nombres descriptivos: componentes en PascalCase, funciones en camelCase.
   - Comentarios solo donde la intención no sea obvia.
 
+▶ SISTEMA DE ICONOS — React Native (BluPersonasApp)
+  REGLA ABSOLUTA: nunca uses IconVector con nombres de string.
+  Patrón correcto:
+    1. Verifica que el SVG esté exportado en @Assets/Svg/index.ts.
+       Si no está, añade primero: export { default as NombreIcono } from './NombreIcono'
+    2. Importa el SVG como componente:
+         import IconSvg from '@Components/Icons/components/IconSvg'
+         import { NombreIcono } from '@Assets/Svg'
+    3. Úsalo: <IconSvg IconComponent={NombreIcono} size={Size.size24} />
+  Nunca construyas el ícono con un string ('agenda', 'edit', etc.).
+
+▶ TRADUCCIONES — REGLAS ESTRICTAS (BluPersonasApp)
+  1. NUNCA modifiques archivos de traducción existentes (newEs.json, newEn.json u otros ya en producción).
+  2. Para cada nueva feature, crea archivos separados:
+       src/configuration/language/{feature}Es.json  →  claves en español
+       src/configuration/language/{feature}En.json  →  claves en inglés
+     con estructura plana: { "clavePantalla": { "campo1": "...", "campo2": "..." } }
+  3. Registra los nuevos archivos en language.constant.ts usando deepMerge:
+       import featureEs from '../{feature}Es.json'
+       import featureEn from '../{feature}En.json'
+       // y en TRANSLATIONS_LOCAL: deepMerge(existente, { es: featureEs, en: featureEn })
+  4. En el componente define constantes de namespace:
+       const T = 'clave.existente.reutilizada'   // para claves de archivos ya existentes
+       const TR = 'clavePantalla'                 // para las nuevas claves del feature
+  5. NUNCA dejes fallbacks hardcodeados: t(`${TR}.campo`) ?? 'texto en español' ← INCORRECTO.
+     Si la clave es nueva, agrégala al JSON; no uses fallback string.
+  6. Para TextInput.placeholder (requiere string | undefined), castea obligatoriamente:
+       placeholder={t(`${TR}.campo`) as string}
+     Motivo: en esta versión de react-i18next, t() puede retornar null.
+     Este cast aplica a CUALQUIER prop que no acepte null (placeholder, accessibilityLabel, etc.).
+  7. Todo texto visible al usuario —labels, placeholders, mensajes, badges— debe pasar por t().
+
+▶ BIBLIOTECA DE COMPONENTES DEL PROYECTO (BluPersonasApp)
+  Usa siempre los componentes del proyecto; nunca primitivos de React Native directamente:
+    ✅ TextCustom        en vez de Text
+    ✅ ButtonCustom      en vez de TouchableOpacity + Text
+    ✅ BoxCustom         para wrappers con padding horizontal (paddingHorizontal={Space.s})
+    ✅ ContainerGradient para pantallas con header de gradiente y botón de regreso
+    ✅ Container         con keyboard={false} para contenido scrollable dentro de la pantalla
+    ✅ SectionWrapper    para secciones con título tipado y contenido agrupado
+    ✅ DeliveryAddress   para mostrar la dirección de entrega del usuario
+    ✅ NameSelection     para selector de nombre en tarjeta con modal de opciones
+  Importaciones: @Components/Forms/components, @Components/Container/components,
+                 @Containers/DebitCard/components, etc.
+  Usa siempre las TypeScript path aliases definidas en tsconfig; nunca rutas relativas.
+
+▶ SWITCH COMPONENT EN REACT NATIVE
+  - NO uses transform: [{ scaleX: n }, { scaleY: n }] para agrandar el Switch.
+    Escala visualmente pero no expande el área de layout → se recorta o deforma en iOS.
+  - NO añadas thumbColor en iOS (el sistema lo ignora; solo aplica en Android).
+  - Usa el Switch nativo con solo value, onValueChange y trackColor.
+  - Para cambiar el color del track usa: trackColor={{ false: Colors.neutrals200, true: Colors.principalColor }}
+
+▶ DATOS DE PERFIL Y DIRECCIÓN (BluPersonasApp)
+  Para mostrar la dirección registrada del usuario en una pantalla:
+    import { useGetBasicInformation } from '@Containers/DebitCard/screens/RequestPhysicalCard/hooks'
+    import { FormatAddressLocation } from '@Helpers'
+    import { IndicatorEnum } from '@dcefront/coredce'
+    // En el hook:
+    const { addressData } = useGetBasicInformation()
+    const addressLabel = useMemo(() => {
+      const main = addressData?.find(a => a.isPrimary === IndicatorEnum.Yes)
+      if (!main) return ''
+      return FormatAddressLocation.from(main.address.segmentReference).cardAddressFormat()
+    }, [addressData])
+
+▶ ARQUITECTURA DE PANTALLAS (BluPersonasApp)
+  Cada nueva pantalla se estructura en 4 archivos bajo src/containers/{Modulo}/screens/{NombrePantalla}/:
+    index.tsx                    → componente React puro (solo JSX, sin lógica de negocio)
+    hooks/use{NombrePantalla}.hook.ts  → toda la lógica, estado y handlers del hook
+    hooks/index.ts               → re-export del hook
+    styles/requestCardScreen.style.ts  → StyleSheet.create con todos los estilos
+    styles/index.ts              → re-export de los estilos
+  La pantalla se registra en el stack de navegación correspondiente.
+
+▶ GESTIÓN DE PAQUETES
+  Siempre usa yarn. Nunca npm install / npm run.
+  Para instalar: yarn add <paquete>
+  Para ejecutar: yarn <script>
+
 ▶ REGLA DE ORO
   Todo código en producción es intocable hasta aprobación explícita del usuario.
   Staging no es producción: jamás consideres la propuesta integrada hasta que

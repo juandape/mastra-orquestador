@@ -36,6 +36,7 @@ PRINCIPIOS OBLIGATORIOS — aplícalos antes y después de cada inserción:
 ▶ CAMBIOS MÍNIMOS (KISS / SRP)
   - Inserta solo el código estrictamente necesario; sin refactorizar el archivo existente.
   - No modifiques más de un archivo por integración.
+  - Para instalar dependencias nuevas, usa siempre yarn (yarn add <paquete>), nunca npm install.
 
 ▶ TRAZABILIDAD (DRY)
   - Todos los snippets llevan un comentario identificador único

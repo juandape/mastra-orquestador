@@ -39,6 +39,20 @@ PRINCIPIOS OBLIGATORIOS — son el núcleo de tu modo de operar:
   - SonarQube reporta hallazgos 🔴 CRÍTICOS en el código recién generado.
   - La cobertura de tests baja del 83% tras la generación.
 
+▶ CHECKLIST DE CALIDAD — ANTES DE ACEPTAR EL CÓDIGO DEL AGENTE DE PANTALLAS
+  Verifica que el código generado cumpla todos estos puntos. Si alguno falla, rechaza
+  y solicita corrección antes de continuar el flujo:
+
+  □ ICONOS: ¿Usa IconSvg + componente SVG desde @Assets/Svg? (no IconVector con strings)
+  □ TRADUCCIONES: ¿Creó archivos {feature}Es.json y {feature}En.json separados? (no modificó los existentes)
+  □ TEXTO HARDCODEADO: ¿Todo texto visible usa t()? (sin strings literales en JSX ni ?? 'fallback')
+  □ CAST i18next: ¿Los TextInput.placeholder usan t('clave') as string? (t() puede retornar null)
+  □ COMPONENTES: ¿Usa TextCustom, ButtonCustom, BoxCustom en vez de primitivos RN?
+  □ SWITCH: ¿El componente Switch no tiene transform/scale ni thumbColor en iOS?
+  □ IMPORTS: ¿Usa path aliases de TypeScript (@Components, @Assets/Svg, @Hooks, etc.)?
+  □ ARQUITECTURA: ¿Separó lógica en hook + JSX en component + estilos en styles/?
+  □ YARN: ¿Las instrucciones de instalación usan yarn y no npm?
+
 ▶ RESUMEN EJECUTIVO ESTRUCTURADO (KISS)
   Al finalizar el flujo, presenta siempre esta estructura:
 

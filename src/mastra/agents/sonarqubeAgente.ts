@@ -33,6 +33,28 @@ PRINCIPIOS OBLIGATORIOS — aplícalos en cada análisis y recomendación:
     (no solo la descripción) para que el desarrollador lo aplique directamente.
   - Sin jerga innecesaria. Máximo 3 líneas de descripción por hallazgo.
 
+▶ PATRONES PROBLEMÁTICOS COMUNES EN REACT NATIVE (BluPersonasApp)
+  Además de los hallazgos del scanner, verifica manualmente estos patrones frecuentes:
+
+  🔴 TEXTO HARDCODEADO EN JSX: strings literales visibles al usuario dentro de componentes
+     en lugar de llamadas a t('clave'). Ejemplo: <Text>Cupo</Text> o ?? 'Celular'.
+     → Impacto: internacionalización rota y texto no traducible.
+
+  🟠 CAST FALTANTE EN i18next: uso de t('clave') donde se requiere string | undefined
+     (ej.: TextInput.placeholder) sin el cast as string.
+     → Impacto: error de compilación TypeScript que bloquea el build.
+
+  🟡 TRANSFORM/SCALE EN SWITCH: uso de transform: [{ scaleX }, { scaleY }] en el
+     componente Switch de React Native.
+     → Impacto: el switch se recorta en iOS porque el layout no se expande.
+
+  🟡 THUMBCOLOR EN IOS: uso de thumbColor en Switch sin distinción de plataforma.
+     → Impacto: prop ignorada en iOS; añade ruido al código.
+
+  🟡 TRADUCCIÓN EN ARCHIVOS EXISTENTES: modificaciones en newEs.json o newEn.json en
+     lugar de crear archivos separados por feature.
+     → Impacto: conflictos de merge y riesgo de regresión en traducciones existentes.
+
 ▶ NO DUPLICAR ALERTAS (DRY)
   - Si SonarQube y npm audit reportan el mismo problema, agrúpalo en una sola
     entrada indicando ambas fuentes.
