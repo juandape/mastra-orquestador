@@ -1,6 +1,6 @@
 # Mastra Orquestador de Agentes para Proyectos React/React Native
 
-Librería de agentes IA con Mastra que automatiza las tareas de desarrollo en proyectos React y React Native. Describe lo que quieres construir y los agentes hacen el resto.
+Orquestador de agentes IA con Mastra que automatiza las tareas de desarrollo en proyectos React y React Native. Se usa exclusivamente a través del chat de **GitHub Copilot** mediante el protocolo MCP.
 
 ## ¿Qué hace?
 
@@ -55,14 +55,12 @@ npm install
 
 ---
 
-### Paso 2 — Configurar tu API Key de IA
+### Paso 2 — Configurar el modelo de IA
 
-Los agentes necesitan una clave de acceso a un modelo de IA para poder generar código.
-La más fácil de obtener es la de OpenAI:
+Los agentes usan el modelo de IA que esté configurado en el archivo `.env` dentro de la carpeta `mastra-orquestador`.
+Crea ese archivo con el proveedor y la clave que ya tengas disponible:
 
-1. Ve a [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
-2. Crea una cuenta (si no tienes) y genera una nueva API Key
-3. Crea un archivo llamado `.env` dentro de la carpeta `mastra-orquestador` con este contenido:
+**OpenAI:**
 
 ```bash
 # .env
@@ -71,12 +69,26 @@ AI_MODEL=gpt-4o
 OPENAI_API_KEY=sk-...tu-clave-aqui...
 ```
 
-> **¿Qué es una API Key?** Es como una contraseña que le dice al modelo de IA
-> "esta persona tiene permiso para usarme". Nunca la compartas con nadie.
+**Anthropic (Claude):**
 
-> **¿Quieres usar otro proveedor?** También puedes usar Anthropic (Claude), Google (Gemini)
-> o Groq. Cambia `AI_PROVIDER` y `AI_MODEL`, y agrega la API Key correspondiente:
-> `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY` o `GROQ_API_KEY`.
+```bash
+# .env
+AI_PROVIDER=anthropic
+AI_MODEL=claude-3-5-sonnet-20241022
+ANTHROPIC_API_KEY=sk-ant-...tu-clave-aqui...
+```
+
+**Google (Gemini):**
+
+```bash
+# .env
+AI_PROVIDER=google
+AI_MODEL=gemini-2.0-flash
+GOOGLE_GENERATIVE_AI_API_KEY=AIza...tu-clave-aqui...
+```
+
+> Si ya tienes una cuenta en cualquiera de estos proveedores, usa la clave que ya tienes.
+> Si no tienes ninguna, [OpenAI](https://platform.openai.com/api-keys) ofrece créditos gratuitos al registrarse.
 
 ---
 
@@ -239,7 +251,7 @@ src/
 ## Arquitectura
 
 - **`src/mcp-server.ts`** — servidor MCP: expone los 7 agentes como herramientas para el chat de Copilot
-- **`src/setup.ts`** — carga las variables de entorno del `.env` antes de inicializar los agentes
+- **`src/setup.ts`** — carga las variables de entorno del `.env` (proveedor y clave de IA) antes de inicializar los agentes
 - **`src/mastra/agents`** — lógica de cada agente IA
 - **`src/mastra/model.ts`** — fábrica de modelos: resuelve qué proveedor usar según el `.env`
 - **`src/mastra/workflows`** — orquestación con `.step().then().commit()`
