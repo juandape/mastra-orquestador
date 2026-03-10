@@ -195,16 +195,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       content: [{ type: 'text' as const, text: resultado.text }],
     };
   } catch (err) {
-    const mensaje_error =
-      err instanceof Error ? err.message : 'Error desconocido';
+    const raw = err instanceof Error ? err.message : String(err);
+
+    // Error de API Key no configurada → mensaje accionable
+    const sinClave =
+      raw.includes('API key') ||
+      raw.includes('api_key') ||
+      raw.includes('apiKey') ||
+      raw.includes('401') ||
+      raw.includes('Unauthorized') ||
+      raw.includes('authentication');
+
+    const mensajeError = sinClave
+      ? [
+          `⚠️  Sin modelo de IA configurado para "${name}".`,
+          ``,
+          `Crea el archivo .env en la carpeta mastra-orquestador con tu proveedor:`,
+          ``,
+          `  AI_PROVIDER=openai`,
+          `  AI_MODEL=gpt-4o`,
+          `  OPENAI_API_KEY=sk-...tu-clave...`,
+          ``,
+          `Otros proveedores soportados: anthropic, google, groq, ollama`,
+          `Ver README para detalles de configuración.`,
+        ].join('\n')
+      : `Error al ejecutar ${name}: ${raw}`;
+
     return {
       isError: true,
-      content: [
-        {
-          type: 'text' as const,
-          text: `Error al ejecutar ${name}: ${mensaje_error}`,
-        },
-      ],
+      content: [{ type: 'text' as const, text: mensajeError }],
     };
   }
 });

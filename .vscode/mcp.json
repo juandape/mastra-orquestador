@@ -1,0 +1,11 @@
+{
+  "servers": {
+    "mastra-orquestador": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["tsx", "src/mcp-server.ts"],
+      "cwd": "${workspaceFolder}",
+      "env": {}
+    }
+  }
+}

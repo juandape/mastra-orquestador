@@ -83,18 +83,21 @@ export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
 
 /**
  * Devuelve la instancia de modelo configurada en el entorno.
- * Lee AI_PROVIDER + AI_MODEL, con fallback a OPENAI_MODEL (retrocompatibilidad).
+ *
+ * MODO COPILOT-FIRST:
+ *   Si no hay AI_PROVIDER ni API Key configurada, el servidor MCP arranca igual.
+ *   El error solo ocurre cuando un agente intenta generar contenido, y se devuelve
+ *   un mensaje claro pidiendo configurar el .env.
  *
  * El cast a `LanguageModelV1` es intencional: todos los providers de @ai-sdk
- * son compatibles en runtime con la interfaz que espera @mastra/core, pero las
- * versiones de tipos del SDK de Google usan LanguageModelV3 (superset de V1).
+ * son compatibles en runtime con la interfaz que espera @mastra/core.
  */
 export function getModelInstance(): LanguageModelV1 {
-  const provider = (process.env.AI_PROVIDER ?? 'openai') as AIProvider;
+  const provider = (process.env.AI_PROVIDER ?? '') as AIProvider;
   const model =
     process.env.AI_MODEL ??
     process.env.OPENAI_MODEL ??
-    PROVIDER_CONFIGS[provider]?.defaultModel ??
+    PROVIDER_CONFIGS[provider as AIProvider]?.defaultModel ??
     'gpt-4o';
 
   switch (provider) {
@@ -105,7 +108,7 @@ export function getModelInstance(): LanguageModelV1 {
       return google(model) as unknown as LanguageModelV1;
 
     case 'groq': {
-      const groq = createGroq();
+      const groq = createGroq({ apiKey: process.env.GROQ_API_KEY ?? '' });
       return groq(model) as unknown as LanguageModelV1;
     }
 
@@ -119,8 +122,12 @@ export function getModelInstance(): LanguageModelV1 {
     }
 
     case 'openai':
-    default:
       return openai(model);
+
+    default:
+      // Sin proveedor configurado: retornar openai como fallback.
+      // Fallará con mensaje claro al primer generate(), no en el arranque.
+      return openai(process.env.AI_MODEL ?? 'gpt-4o');
   }
 }
 

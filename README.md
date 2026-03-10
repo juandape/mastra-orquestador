@@ -55,12 +55,16 @@ npm install
 
 ---
 
-### Paso 2 — Configurar el modelo de IA
+### Paso 2 — (Opcional) Configurar un modelo de IA
 
-Los agentes usan el modelo de IA que esté configurado en el archivo `.env` dentro de la carpeta `mastra-orquestador`.
-Crea ese archivo con el proveedor y la clave que ya tengas disponible:
+> El servidor MCP **arranca sin ningún modelo configurado**. Puedes probarlo de inmediato.
+> Un modelo externo solo es necesario cuando los agentes necesitan **generar código**.
+> Si intenta generar sin modelo, recibirás un mensaje explicando cómo configurarlo.
 
-**OpenAI:**
+Cuando quieras activar la generación de código, crea un archivo `.env` dentro de la
+carpeta `mastra-orquestador` con el proveedor que prefieras:
+
+**OpenAI** (el más común):
 
 ```bash
 # .env
@@ -72,7 +76,6 @@ OPENAI_API_KEY=sk-...tu-clave-aqui...
 **Anthropic (Claude):**
 
 ```bash
-# .env
 AI_PROVIDER=anthropic
 AI_MODEL=claude-3-5-sonnet-20241022
 ANTHROPIC_API_KEY=sk-ant-...tu-clave-aqui...
@@ -81,37 +84,53 @@ ANTHROPIC_API_KEY=sk-ant-...tu-clave-aqui...
 **Google (Gemini):**
 
 ```bash
-# .env
 AI_PROVIDER=google
 AI_MODEL=gemini-2.0-flash
 GOOGLE_GENERATIVE_AI_API_KEY=AIza...tu-clave-aqui...
 ```
 
-> Si ya tienes una cuenta en cualquiera de estos proveedores, usa la clave que ya tienes.
-> Si no tienes ninguna, [OpenAI](https://platform.openai.com/api-keys) ofrece créditos gratuitos al registrarse.
+**Groq** (muy rápido, plan gratuito disponible):
+
+```bash
+AI_PROVIDER=groq
+AI_MODEL=llama-3.3-70b-versatile
+GROQ_API_KEY=gsk_...tu-clave-aqui...
+```
+
+**Ollama** (local, sin costo):
+
+```bash
+AI_PROVIDER=ollama
+AI_MODEL=llama3.2
+# OLLAMA_BASE_URL=http://localhost:11434  # opcional
+```
 
 ---
 
-### Paso 3 — Abrir ambos proyectos en VS Code
+### Paso 3 — Abrir los proyectos en VS Code
 
 Para que el chat de Copilot pueda acceder a los agentes Y a tu proyecto al mismo tiempo,
 debes tener los dos abiertos en la misma ventana de VS Code:
 
 1. Abre VS Code
 2. Ve a **File → Open Folder...** y abre la carpeta `mastra-orquestador`
-3. Ve a **File → Add Folder to Workspace...** y agrega la carpeta de tu proyecto
-   (por ejemplo: `blupersonasapp`)
+   (VS Code detectará automáticamente el `mcp.json` que está dentro)
+3. Ve a **File → Add Folder to Workspace...** y agrega la carpeta de tu proyecto React/React Native
 4. Guarda el workspace: **File → Save Workspace As...**
-   (guárdalo con un nombre como `mi-workspace.code-workspace`)
+   (ponle el nombre que quieras — no afecta al funcionamiento)
 
 La próxima vez solo abres ese archivo `.code-workspace` y tendrás los dos proyectos listos.
+
+> **Funciona en cualquier máquina y con cualquier ruta.** El `mcp.json` usa `${workspaceFolder}`,
+> que VS Code resuelve automáticamente como el directorio `mastra-orquestador` sin importar
+> dónde esté clonado el proyecto.
 
 ---
 
 ### Paso 4 — Verificar que el servidor MCP está activo
 
 Cuando abres el workspace, VS Code detecta automáticamente el archivo `.vscode/mcp.json`
-y arrancar el servidor de agentes en segundo plano.
+y arranca el servidor de agentes en segundo plano.
 
 Para confirmar que está funcionando:
 
@@ -150,11 +169,11 @@ editar mi nombre, foto y correo electrónico.
 
 Imagen de diseño: [arrastra tu imagen de Figma directamente al chat]
 
-Ruta del proyecto: /Users/tu-usuario/Projects/blupersonasapp
+Ruta del proyecto: /ruta/completa/a/tu-proyecto
 ```
 
-> **¿Cómo sé la ruta de mi proyecto?** Abre una terminal dentro de la carpeta
-> de tu proyecto y ejecuta `pwd`. Copia y pega el resultado.
+> **¿Cómo saber la ruta?** Abre una terminal dentro de tu proyecto y ejecuta `pwd`.
+> Copia y pega el resultado. Funciona con **cualquier proyecto React o React Native**.
 
 ---
 
