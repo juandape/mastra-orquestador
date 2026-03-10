@@ -12,10 +12,24 @@ export const analisisAgente = new Agent({
 Tu función es:
 1. Analizar la estructura del proyecto: dependencias, devDependencies, scripts disponibles y carpetas en src/.
 2. Identificar el framework usado (React, Next.js, Expo, React Native, Vite, etc.).
-3. Buscar implementaciones similares en el código fuente cuando el usuario describa una funcionalidad.
-4. Verificar estándares de código frontend ejecutando el script "standards" si el proyecto lo tiene.
-5. Identificar patrones de arquitectura, posibles duplicaciones y oportunidades de mejora.
-6. Presentar los resultados de forma clara y accionable.
+3. Detectar y reportar explícitamente la estructura de rutas/screens del proyecto:
+   - Cuál es el directorio de pantallas/páginas (src/screens/, src/pages/, src/app/, src/views/, app/, etc.).
+   - Qué librería de navegación usa (React Navigation, Expo Router, React Router, Next.js router).
+   - Si las rutas se declaran en un archivo central (App.tsx, router.tsx, navigation/, etc.).
+4. Detectar y reportar si ya existen integraciones de analytics/tracking:
+   - Archivos dedicados (analytics.ts, services/analytics.js, tracking.ts, etc.).
+   - Providers de GA, AppsFlyer, Katalon ya configurados en App.tsx o index.tsx.
+   - Scripts ya presentes en public/index.html (solo para web).
+5. Buscar implementaciones similares en el código fuente cuando el usuario describa una funcionalidad.
+6. Verificar estándares de código frontend ejecutando el script "standards" si el proyecto lo tiene.
+7. Identificar patrones de arquitectura, posibles duplicaciones y oportunidades de mejora.
+8. Presentar los resultados de forma clara y accionable.
+
+INFORMACIÓN QUE SIEMPRE DEBES INCLUIR EN EL REPORTE:
+- 📁 Directorio de screens/pages detectado (ruta exacta)
+- 🧭 Librería de navegación detectada
+- 📊 Estado de integraciones de analytics (implementado / no implementado / parcial)
+- 📄 Si existe public/index.html (relevante para integraciones web)
 
 PRINCIPIOS OBLIGATORIOS — aplícalos en cada análisis y recomendación:
 

@@ -5,14 +5,61 @@ import path from 'path';
 import axios from 'axios';
 import { writeFileSafe } from '../utils/safeFileWriter.js';
 
+/**
+ * Detecta el directorio de screens/pages del proyecto en el siguiente orden:
+ * src/screens/ → src/pages/ → src/app/ → src/views/ → app/ → (fallback a src/screens/)
+ */
+function detectarScreensDir(proyectoPath: string): string {
+  const candidatos = [
+    path.join(proyectoPath, 'src', 'screens'),
+    path.join(proyectoPath, 'src', 'pages'),
+    path.join(proyectoPath, 'src', 'app'),
+    path.join(proyectoPath, 'src', 'views'),
+    path.join(proyectoPath, 'app'),
+  ];
+  for (const dir of candidatos) {
+    if (fs.existsSync(dir)) return dir;
+  }
+  // Fallback: crear en src/screens/
+  return path.join(proyectoPath, 'src', 'screens');
+}
+
+/**
+ * Detecta si el proyecto usa TypeScript (.tsx/.ts) o JavaScript (.jsx/.js)
+ */
+function detectarExtension(proyectoPath: string): '.tsx' | '.jsx' {
+  const tsConfig = path.join(proyectoPath, 'tsconfig.json');
+  if (fs.existsSync(tsConfig)) return '.tsx';
+  return '.jsx';
+}
+
+/**
+ * Detecta si el proyecto es React Native (usa View/Text en vez de div/h1)
+ */
+function esReactNative(proyectoPath: string): boolean {
+  const pkgPath = path.join(proyectoPath, 'package.json');
+  if (!fs.existsSync(pkgPath)) return false;
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+  const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+  return 'react-native' in deps || 'expo' in deps;
+}
+
 export const generarPantallasTool = createTool({
   id: 'generar-pantallas',
   description:
-    'Genera archivos de componentes React (index.jsx) en src/screens para cada historia de usuario proporcionada. Opcionalmente asocia una imagen de Figma.',
+    'Detecta la estructura de rutas/screens del proyecto y genera los componentes en el directorio existente. ' +
+    'Si ya existe una pantalla, la propuesta va a _staging/. Adapta la sintaxis al framework (RN vs web, TS vs JS).',
   inputSchema: z.object({
     proyectoPath: z
       .string()
       .describe('Ruta absoluta al directorio raíz del proyecto React'),
+    screensDir: z
+      .string()
+      .optional()
+      .describe(
+        'Directorio destino de pantallas detectado por analisisAgente. ' +
+          'Si se omite, la herramienta lo detecta automáticamente.',
+      ),
     historias: z
       .array(
         z.object({
@@ -29,13 +76,17 @@ export const generarPantallasTool = createTool({
       ),
   }),
   outputSchema: z.object({
+    screensDir: z.string(),
     pantallasGeneradas: z.array(z.string()),
     pantallasEnStaging: z.array(z.string()),
     mensaje: z.string(),
   }),
   execute: async ({ context }) => {
     const { proyectoPath, historias, imagenFigma } = context;
-    const screensDir = path.join(proyectoPath, 'src', 'screens');
+
+    const screensDir = context.screensDir ?? detectarScreensDir(proyectoPath);
+    const ext = detectarExtension(proyectoPath);
+    const esRN = esReactNative(proyectoPath);
 
     if (!fs.existsSync(screensDir)) {
       fs.mkdirSync(screensDir, { recursive: true });
@@ -73,25 +124,15 @@ export const generarPantallasTool = createTool({
         }
       }
 
-      const archivoComponente = path.join(nombreDir, 'index.jsx');
-      const descripcion = historia.descripcion || '';
-      const contenidoComponente = `// Pantalla generada para: ${historia.titulo}
-// Descripción: ${descripcion}
-// Imagen de referencia: figma.png
+      const archivoComponente = path.join(nombreDir, `index${ext}`);
+      const descripcion = historia.descripcion ?? '';
 
-import React from 'react';
+      // ── Plantilla adaptada al framework ───────────────────────────────────
+      const contenidoComponente = esRN
+        ? `// Pantalla generada para: ${historia.titulo}\n// Descripción: ${descripcion}\n// Imagen de referencia: figma.png\n\nimport React from 'react';\nimport { View, Text, StyleSheet } from 'react-native';\n\nexport default function ${nombre}() {\n  return (\n    <View style={styles.container}>\n      <Text style={styles.titulo}>${historia.titulo}</Text>\n      <Text>${descripcion}</Text>\n    </View>\n  );\n}\n\nconst styles = StyleSheet.create({\n  container: { flex: 1, padding: 16 },\n  titulo: { fontSize: 24, fontWeight: 'bold', marginBottom: 8 },\n});\n`
+        : `// Pantalla generada para: ${historia.titulo}\n// Descripción: ${descripcion}\n// Imagen de referencia: figma.png\n\nimport React from 'react';\n\nexport default function ${nombre}() {\n  return (\n    <div>\n      <h1>${historia.titulo}</h1>\n      <p>${descripcion}</p>\n    </div>\n  );\n}\n`;
 
-export default function ${nombre}() {
-  return (
-    <div>
-      <h1>${historia.titulo}</h1>
-      <p>${descripcion}</p>
-    </div>
-  );
-}
-`;
-      // ── Escritura segura: nunca sobrescribe producción ─────────────────────
-      // mode 'create-only': si ya existe → propone en _staging/ en vez de omitir
+      // ── Escritura segura: nunca sobrescribe producción ────────────────────
       const resultado = writeFileSafe(
         archivoComponente,
         contenidoComponente,
@@ -109,7 +150,7 @@ export default function ${nombre}() {
     const mensajePartes: string[] = [];
     if (generadas.length > 0)
       mensajePartes.push(
-        `✅ ${generadas.length} pantalla(s) creadas en src/screens.`,
+        `✅ ${generadas.length} pantalla(s) creadas en ${screensDir}.`,
       );
     if (enStaging.length > 0)
       mensajePartes.push(
@@ -120,6 +161,7 @@ export default function ${nombre}() {
       mensajePartes.push('Sin cambios: ninguna pantalla fue procesada.');
 
     return {
+      screensDir,
       pantallasGeneradas: generadas,
       pantallasEnStaging: enStaging,
       mensaje: mensajePartes.join('\n'),
