@@ -27,6 +27,50 @@ PRINCIPIOS OBLIGATORIOS — aplícalos antes y después de cada inserción:
   - Para Next.js: usa _app.tsx / layout.tsx o un dedicated analytics component.
   - Para CRA/Vite: public/index.html es válido SOLO si no hay patrón JS/TS previo.
 
+▶ PATRÓN DE ANALYTICS EN BluPersonasApp \u2014 OBLIGATORIO PARA ESTE PROYECTO
+  BluPersonasApp tiene un sistema centralizado. NUNCA llames Firebase, AppsFlyer o
+  Dynatrace directamente. El flujo correcto es:
+
+  1. HOOK CENTRAL: useEventTracker en @Hooks/useEventTracker.hook.ts
+     Firma: trackEvent({ name: unknown, payload?: Record<string,any>, trackIn: { googleAnalytics?: boolean, appsFlyer?: boolean } })
+     - googleAnalytics: true  → llama Firebase Analytics + Dynatrace/Katalon automáticamente
+     - appsFlyer: true        → llama AppsFlyer
+     - Dynatrace/Katalon NO se llama por separado; se incluye al pasar googleAnalytics: true
+
+  2. ENUMS DE EVENTOS:
+     - GA + Dynatrace/Katalon: @Enums/googleAnalyticsEvents.enum (default export GA_EVENTS)
+     - AppsFlyer:              @Enums/appsFlyerEvents.enum (default export APPS_FLYER_EVENTS)
+     Agrega los nuevos eventos al enum correspondiente. Convención de nombre:
+       FEATURE_ACCION          → ej. ADDITIONAL_CARD_SCREEN_VIEW, ADDITIONAL_CARD_CONFIRM_CLICK
+
+  3. HOOK DE TRACKING POR PANTALLA:
+     Crea un hook dedicado por pantalla: use{NombrePantalla}Track.hook.ts
+     Ubícalo en hooks/ junto al hook principal de la pantalla.
+     Estructura:
+       import { useEventTracker, useUserInfo } from '@Hooks'
+       import GA_EVENTS from '@Enums/googleAnalyticsEvents.enum'
+       export default function use{NombrePantalla}Track() {
+         const { trackEvent } = useEventTracker()
+         const { handleUserData } = useUserInfo()
+         const trackScreenView = () => {
+           try {
+             const { session_id } = handleUserData()
+             trackEvent({ name: GA_EVENTS.FEATURE_SCREEN_VIEW, payload: { session_id }, trackIn: { googleAnalytics: true, appsFlyer: true } })
+           } catch (_) {}
+         }
+         return { trackScreenView, trackConfirmClick, ... }
+       }
+
+  4. INTEGRACIÓN EN EL HOOK PRINCIPAL:
+     - Importa el tracking hook y desestructura sus funciones
+     - Llama trackScreenView() en un useEffect(() => {}, []) para el evento de vista
+     - Llama los demás trackers dentro de los handlers existentes (antes de la lógica)
+
+  5. QUÉ AGREGAR A CADA ENUM:
+     Eventos típicos por pantalla (ajusta según la pantalla):
+     - GA_EVENTS: SCREEN_VIEW, CONFIRM_CLICK, SUCCESS, ERROR, RETRY_CLICK, VIEW_BENEFITS_CLICK, UPDATE_ADDRESS_CLICK
+     - APPS_FLYER_EVENTS: SCREEN_VIEW, CONFIRM_CLICK, SUCCESS, ERROR (solo los más relevantes)
+
 ▶ PROTECCIÓN DEL CÓDIGO EN PRODUCCIÓN (SOLID — OCP)
   - La herramienta crea automáticamente un backup antes de modificar cualquier archivo.
     Informa al usuario la ruta exacta del backup.

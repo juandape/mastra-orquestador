@@ -50,6 +50,68 @@ PRINCIPIOS OBLIGATORIOS — aplícalos en cada análisis y sugerencia:
   - Los tests de pantallas nuevas deben verificar: renderización sin crash, texto visible
     vía claves de traducción, y comportamiento de interacciones clave (onPress, onChangeText).
 
+▶ PATRONES JEST CRÍTICOS (BluPersonasApp) — errores frecuentes a evitar:
+
+  1. HOISTING DE jest.mock() — factory NO puede referenciar variables del mismo scope:
+     ❌ INCORRECTO:
+       const defaultReturn = { foo: 'bar' }
+       jest.mock('./myHook', () => ({ useHook: jest.fn(() => defaultReturn) }))
+       // defaultReturn es undefined en el factory porque jest.mock se eleva al tope
+     ✅ CORRECTO:
+       jest.mock('./myHook', () => ({ useHook: jest.fn() }))
+       // En beforeEach:
+       ;(useHook as jest.Mock).mockReturnValue(defaultReturn)
+
+  2. require() DENTRO DE TESTS — siempre usa imports al tope del archivo:
+     ❌ INCORRECTO (causa error ESLint "Require statement not part of import"):
+       ;(require('@Store/state.selector').selectUser as jest.Mock).mockImplementation(...)
+     ✅ CORRECTO:
+       // Al tope del archivo:
+       import { selectUser } from '@Store/state.selector'
+       // En el test:
+       ;(selectUser as jest.Mock).mockImplementation(...)
+
+  3. TouchableOpacity GLOBALMENTE MOCKEADO COMO View (jest.setup.js):
+     - En BluPersonasApp, jest.setup.js mockea TouchableOpacity, TouchableHighlight,
+       TouchableWithoutFeedback y TouchableNativeFeedback como View.
+     - fireEvent.press() NO funciona en estos elementos porque View no tiene onPress.
+     ✅ CORRECTO — invocar el prop directamente:
+       act(() => { getByTestId('my-button').props.onPress?.() })
+       act(() => { getByText('Confirmar').props.onPress?.() })
+     ✅ TAMBIÉN CORRECTO — para ButtonCustom, mockear como Text (soporta onPress):
+       ButtonCustom: ({ buttonLabel, onPress }: any) => {
+         const { Text } = require('react-native')
+         return <Text onPress={onPress}>{buttonLabel}</Text>
+       }
+
+  4. UNSAFE_getAllByProps CAMELCASE — el linter reporta error por la mayúscula:
+     ✅ CORRECTO — alias al desestructurar:
+       // eslint-disable-next-line @typescript-eslint/naming-convention
+       const { UNSAFE_getAllByProps: getAllByProps } = render(<Comp />)
+       // Luego usa getAllByProps normalmente
+
+  5. CAPTURAR CALLBACKS PASADOS A COMPONENTES MOCKEADOS:
+     Cuando necesitas invocar onValueChange o callback de un componente hijo mockeado:
+     ✅ CORRECTO — capture mock para exponer el prop recibido:
+       const mockOnValueChangeCapture = jest.fn()
+       jest.mock('./MyChild', () =>
+         function MyChild({ onValueChange }: any) {
+           mockOnValueChangeCapture(onValueChange)  // captura aquí
+           return <View />
+         }
+       )
+       // En el test, después de render():
+       const lastCapture = mockOnValueChangeCapture.mock.calls
+       const capturedFn = lastCapture[lastCapture.length - 1]?.[0]
+       act(() => { capturedFn?.(true) })
+
+  6. Switch NATIVO — onValueChange no es accesible via fireEvent:
+     ✅ CORRECTO — acceder al prop del elemento UNSAFE:
+       // eslint-disable-next-line @typescript-eslint/naming-convention
+       const { UNSAFE_getAllByProps: getAllByProps } = render(<Comp />)
+       const switchEl = getAllByProps({ accessibilityLabel: 'my-switch' })[0]
+       act(() => { switchEl.props.onValueChange?.(true) })
+
 ▶ REGLA DE ORO
   Ningún test existente debe borrarse ni modificarse sin aprobación explícita del usuario.
   Los nuevos tests propuestos deben mostrarse como sugerencias antes de escribirlos.
