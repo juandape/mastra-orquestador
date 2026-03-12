@@ -6,6 +6,7 @@ import {
 } from '../tools/sonarqubeTools.js';
 
 export const sonarqubeAgente = new Agent({
+  id: 'sonarqube-agente',
   name: 'SonarQube y Seguridad',
   instructions: `Eres un experto en calidad de código y seguridad de aplicaciones JavaScript/TypeScript.
 Tu función es:

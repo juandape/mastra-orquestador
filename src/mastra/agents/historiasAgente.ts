@@ -2,6 +2,7 @@ import { Agent } from '@mastra/core/agent';
 import { getModelInstance } from '../model.js';
 
 export const historiasAgente = new Agent({
+  id: 'historias-agente',
   name: 'Historias de Usuario',
   instructions: `Eres un experto en metodologías ágiles, análisis de requerimientos y escritura de historias de usuario.
 Tu función es:

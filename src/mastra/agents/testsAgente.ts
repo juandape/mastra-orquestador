@@ -3,6 +3,7 @@ import { getModelInstance } from '../model.js';
 import { ejecutarTestsTool } from '../tools/testsTools.js';
 
 export const testsAgente = new Agent({
+  id: 'tests-agente',
   name: 'Tests y Cobertura',
   instructions: `Eres un experto en testing de aplicaciones JavaScript/TypeScript con React y React Native.
 Tu función es:

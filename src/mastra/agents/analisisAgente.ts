@@ -7,6 +7,7 @@ import {
 } from '../tools/proyectoTools.js';
 
 export const analisisAgente = new Agent({
+  id: 'analisis-agente',
   name: 'Análisis de Proyecto',
   instructions: `Eres un experto analizador de proyectos React y React Native.
 Tu función es:

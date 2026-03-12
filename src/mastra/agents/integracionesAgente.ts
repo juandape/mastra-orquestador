@@ -3,6 +3,7 @@ import { getModelInstance } from '../model.js';
 import { insertarTagsIntegracionTool } from '../tools/integracionesTools.js';
 
 export const integracionesAgente = new Agent({
+  id: 'integraciones-agente',
   name: 'Integraciones',
   instructions: `Eres un experto en integraciones de herramientas de análisis, testing y marketing en aplicaciones web y móviles.
 Tu función es:

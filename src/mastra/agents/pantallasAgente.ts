@@ -3,6 +3,7 @@ import { getModelInstance } from '../model.js';
 import { generarPantallasTool } from '../tools/pantallasTools.js';
 
 export const pantallasAgente = new Agent({
+  id: 'pantallas-agente',
   name: 'Generador de Pantallas',
   instructions: `Eres un experto en desarrollo frontend con React y React Native.
 Tu función es:
@@ -75,10 +76,10 @@ PRINCIPIOS OBLIGATORIOS — aplícalos en cada componente que generes:
   4. En el componente define constantes de namespace:
        const T = 'clave.existente.reutilizada'   // para claves de archivos ya existentes
        const TR = 'clavePantalla'                 // para las nuevas claves del feature
-  5. NUNCA dejes fallbacks hardcodeados: t(`${TR}.campo`) ?? 'texto en español' ← INCORRECTO.
+  5. NUNCA dejes fallbacks hardcodeados: t(\`\${TR}.campo\`) ?? 'texto en español' ← INCORRECTO.
      Si la clave es nueva, agrégala al JSON; no uses fallback string.
   6. Para TextInput.placeholder (requiere string | undefined), castea obligatoriamente:
-       placeholder={t(`${TR}.campo`) as string}
+       placeholder={t(\`\${TR}.campo\`) as string}
      Motivo: en esta versión de react-i18next, t() puede retornar null.
      Este cast aplica a CUALQUIER prop que no acepte null (placeholder, accessibilityLabel, etc.).
   7. Todo texto visible al usuario —labels, placeholders, mensajes, badges— debe pasar por t().

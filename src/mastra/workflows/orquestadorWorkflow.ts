@@ -28,7 +28,7 @@ const analisisStep = createStep({
     historiasRaw: z.string(),
   }),
   execute: async (ctx) => {
-    const input = ctx.context.inputData;
+    const input = ctx.inputData;
     const mastra = ctx.mastra;
     const agent = mastra?.getAgent('analisis-agente');
     if (!agent) throw new Error('analisis-agente no encontrado');
@@ -71,7 +71,7 @@ const historiasStep = createStep({
     proyectoPath: z.string(),
   }),
   execute: async (ctx) => {
-    const input = ctx.context.inputData;
+    const input = ctx.inputData;
     const mastra = ctx.mastra;
     const agent = mastra?.getAgent('historias-agente');
     if (!agent) throw new Error('historias-agente no encontrado');
@@ -131,7 +131,7 @@ const pantallasStep = createStep({
     historias: historiasSchema,
   }),
   execute: async (ctx) => {
-    const input = ctx.context.inputData;
+    const input = ctx.inputData;
     const mastra = ctx.mastra;
     const agent = mastra?.getAgent('pantallas-agente');
     if (!agent) throw new Error('pantallas-agente no encontrado');
@@ -179,7 +179,7 @@ const standardsStep = createStep({
     historias: historiasSchema,
   }),
   execute: async (ctx) => {
-    const input = ctx.context.inputData;
+    const input = ctx.inputData;
     const mastra = ctx.mastra;
     const agent = mastra?.getAgent('analisis-agente');
     if (!agent) throw new Error('analisis-agente no encontrado');
@@ -219,7 +219,7 @@ const testsStep = createStep({
     proyectoPath: z.string(),
   }),
   execute: async (ctx) => {
-    const input = ctx.context.inputData;
+    const input = ctx.inputData;
     const mastra = ctx.mastra;
     const agent = mastra?.getAgent('tests-agente');
     if (!agent) throw new Error('tests-agente no encontrado');
@@ -256,7 +256,7 @@ const integracionesStep = createStep({
     proyectoPath: z.string(),
   }),
   execute: async (ctx) => {
-    const input = ctx.context.inputData;
+    const input = ctx.inputData;
     const mastra = ctx.mastra;
     const agent = mastra?.getAgent('integraciones-agente');
     if (!agent) throw new Error('integraciones-agente no encontrado');
@@ -292,7 +292,7 @@ const sonarqubeStep = createStep({
     proyectoPath: z.string(),
   }),
   execute: async (ctx) => {
-    const input = ctx.context.inputData;
+    const input = ctx.inputData;
     const mastra = ctx.mastra;
     const agent = mastra?.getAgent('sonarqube-agente');
     if (!agent) throw new Error('sonarqube-agente no encontrado');
@@ -317,8 +317,8 @@ const sonarqubeStep = createStep({
 // ── Workflow completo ─────────────────────────────────────────────────────────
 
 export const orquestadorWorkflow = new Workflow({
-  name: 'orquestador-workflow',
-  triggerSchema: z.object({
+  id: 'orquestador-workflow',
+  inputSchema: z.object({
     proyectoPath: z
       .string()
       .describe('Ruta absoluta al proyecto React/React Native'),
@@ -334,74 +334,18 @@ export const orquestadorWorkflow = new Workflow({
         'URL, base64 o ruta local de la imagen de diseño de Figma (opcional)',
       ),
   }),
-  result: {
-    schema: z.object({
-      resumenSeguridad: z.string(),
-      proyectoPath: z.string(),
-    }),
-    mapping: {
-      resumenSeguridad: { step: sonarqubeStep, path: 'resumenSeguridad' },
-      proyectoPath: { step: sonarqubeStep, path: 'proyectoPath' },
-    },
-  },
+  outputSchema: z.object({
+    resumenSeguridad: z.string(),
+    proyectoPath: z.string(),
+  }),
 });
 
 orquestadorWorkflow
-  // Step 1: Análisis — lee proyecto y contexto de la historia
-  .step(analisisStep, {
-    variables: {
-      proyectoPath: { step: 'trigger' as const, path: 'proyectoPath' },
-      historiasRaw: { step: 'trigger' as const, path: 'historiasRaw' },
-    },
-  })
-  // Step 2: Historias — estructura y mejora la historia de usuario
-  .then(historiasStep, {
-    variables: {
-      resumenAnalisis: { step: analisisStep, path: 'resumenAnalisis' },
-      proyectoPath: { step: analisisStep, path: 'proyectoPath' },
-      historiasRaw: { step: analisisStep, path: 'historiasRaw' },
-    },
-  })
-  // Step 3: Pantallas — genera componentes (mezcla trigger + step → cast)
-  .then(pantallasStep, {
-    variables: {
-      resumenHistorias: { step: historiasStep, path: 'resumenHistorias' },
-      historias: { step: historiasStep, path: 'historias' },
-      proyectoPath: { step: historiasStep, path: 'proyectoPath' },
-      imagenFigma: { step: 'trigger' as const, path: 'imagenFigma' },
-    } as any,
-  })
-  // Step 4: Standards — verifica estándares si el proyecto los tiene
-  .then(standardsStep, {
-    variables: {
-      resumenPantallas: { step: pantallasStep, path: 'resumenPantallas' },
-      proyectoPath: { step: pantallasStep, path: 'proyectoPath' },
-      historias: { step: pantallasStep, path: 'historias' },
-    },
-  })
-  // Step 5: Tests — ejecuta tests y verifica cobertura
-  .then(testsStep, {
-    variables: {
-      resumenStandards: { step: standardsStep, path: 'resumenStandards' },
-      proyectoPath: { step: standardsStep, path: 'proyectoPath' },
-      historias: { step: standardsStep, path: 'historias' },
-    },
-  })
-  // Step 6: Integraciones — agrega tags de Katalon, AppsFlyer, GA
-  .then(integracionesStep, {
-    variables: {
-      resumenTests: { step: testsStep, path: 'resumenTests' },
-      proyectoPath: { step: testsStep, path: 'proyectoPath' },
-    },
-  })
-  // Step 7: Seguridad — SonarQube + npm audit
-  .then(sonarqubeStep, {
-    variables: {
-      resumenIntegraciones: {
-        step: integracionesStep,
-        path: 'resumenIntegraciones',
-      },
-      proyectoPath: { step: integracionesStep, path: 'proyectoPath' },
-    },
-  })
+  .then(analisisStep)
+  .then(historiasStep)
+  .then(pantallasStep)
+  .then(standardsStep)
+  .then(testsStep)
+  .then(integracionesStep)
+  .then(sonarqubeStep)
   .commit();
