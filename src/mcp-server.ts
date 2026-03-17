@@ -1,10 +1,22 @@
 #!/usr/bin/env node
 /**
- * src/mcp-server.ts — Servidor MCP (Model Context Protocol)
+ * src/mcp-server.ts — Servidor MCP sin LLM
  *
- * Expone todos los agentes de mastra-orquestador como herramientas MCP.
- * Esto permite usarlos directamente desde el chat de GitHub Copilot
- * en cualquier proyecto, sin necesidad de publicar en npm.
+ * Expone herramientas de análisis y acción como tools MCP.
+ * No requiere ningún modelo de IA externo: GitHub Copilot (en VS Code)
+ * es el motor de razonamiento; estas tools proveen contexto y ejecutan acciones.
+ *
+ * Herramientas expuestas:
+ *   🔍  analizar-proyecto   — detecta framework, deps, scripts, aliases TS
+ *   🔎  buscar-en-codigo    — grep en archivos JS/TS del proyecto
+ *   📄  leer-archivo        — lee contenido de uno o más archivos
+ *   📂  listar-directorio   — árbol de directorios
+ *   🧪  ejecutar-tests      — corre Jest con cobertura
+ *   📐  ejecutar-standards  — verifica estándares de código
+ *   🛡️  npm-audit           — detecta vulnerabilidades en dependencias
+ *   💾  escribir-archivo    — escribe archivo (en _staging/ si ya existe)
+ *   📊  resumen-sesion      — estado de la memoria de sesión
+ *   🗑️  limpiar-contexto    — limpia la sesión de un proyecto
  *
  * Uso:
  *   tsx src/mcp-server.ts          (desarrollo)
@@ -18,196 +30,235 @@ cargarEnv();
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  sessionStore,
-  extractProjectPath,
-} from './mastra/memory/sessionStore.js';
+import { sessionStore } from './mastra/memory/sessionStore.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
 
-import { mastra } from './mastra/index.js';
+// ── Helpers internos ──────────────────────────────────────────────────────────
 
-// ── Definición de herramientas expuestas ──────────────────────────────────────
+function readdirRecursive(
+  dir: string,
+  exts: string[],
+  maxDepth = 4,
+  depth = 0,
+): string[] {
+  if (!fs.existsSync(dir) || depth > maxDepth) return [];
+  let files: string[] = [];
+  for (const f of fs.readdirSync(dir)) {
+    const full = path.join(dir, f);
+    if (fs.statSync(full).isDirectory()) {
+      files = files.concat(readdirRecursive(full, exts, maxDepth, depth + 1));
+    } else if (exts.length === 0 || exts.includes(path.extname(f))) {
+      files.push(full);
+    }
+  }
+  return files;
+}
+
+function treeDir(dir: string, prefix = '', maxDepth = 3, depth = 0): string {
+  if (!fs.existsSync(dir) || depth > maxDepth) return '';
+  const IGNORAR = new Set([
+    'node_modules',
+    '.git',
+    'coverage',
+    'build',
+    'dist',
+    '.expo',
+    'lib',
+    'out',
+  ]);
+  const items = fs.readdirSync(dir).filter((f) => !IGNORAR.has(f));
+  let result = '';
+  items.forEach((item, i) => {
+    const isLast = i === items.length - 1;
+    result += `${prefix}${isLast ? '└── ' : '├── '}${item}\n`;
+    const full = path.join(dir, item);
+    if (fs.statSync(full).isDirectory() && depth < maxDepth) {
+      result += treeDir(
+        full,
+        prefix + (isLast ? '    ' : '│   '),
+        maxDepth,
+        depth + 1,
+      );
+    }
+  });
+  return result;
+}
+
+// ── Definición de herramientas ────────────────────────────────────────────────
 
 const HERRAMIENTAS = [
   {
-    name: 'orquestar-flujo',
-    agentId: '',
+    name: 'analizar-proyecto',
     description:
-      '⭐ PUNTO DE ENTRADA RECOMENDADO. Ejecuta el flujo completo de desarrollo en 6 pasos: ' +
-      '🔍 Análisis → 📋 Historias → 🎨 Pantallas → 🧪 Tests → 🔌 Integraciones → 🛡️ Seguridad. ' +
-      'Muestra un plan de trabajo tipo checklist ANTES de iniciar y el estado de cada paso al finalizar. ' +
-      'Ideal para nuevas features completas. Ejemplo: proyectoPath=/Users/yo/MiApp, historiasRaw="Como usuario quiero ver mi perfil".',
+      '🔍 Lee package.json y estructura de src/ para obtener: framework detectado, dependencias, ' +
+      'scripts disponibles, aliases TypeScript, gestor de paquetes (yarn/npm) y si tiene script "standards". ' +
+      'Úsalo PRIMERO en cualquier tarea para entender el proyecto antes de crear o modificar archivos.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         proyectoPath: {
           type: 'string',
           description:
-            'Ruta absoluta al directorio raíz del proyecto. Ejemplo: /Users/tu-usuario/Proyectos/MiApp',
-        },
-        historiasRaw: {
-          type: 'string',
-          description:
-            'Historia(s) de usuario o descripción de la funcionalidad a implementar.',
-        },
-        imagenFigma: {
-          type: 'string',
-          description:
-            '(Opcional) URL, base64 o ruta local del diseño Figma de referencia.',
+            'Ruta absoluta al directorio raíz del proyecto a analizar',
         },
       },
-      required: ['proyectoPath', 'historiasRaw'],
+      required: ['proyectoPath'],
     },
   },
   {
-    name: 'mediador-agente',
-    agentId: 'mediador-agente',
+    name: 'buscar-en-codigo',
     description:
-      'Agente coordinador libre. Recibe instrucciones en lenguaje natural y coordina el flujo. ' +
-      'A diferencia de orquestar-flujo, aquí el LLM decide qué pasos ejecutar según el contexto. ' +
-      'Útil para flujos parciales, consultas, o cuando el usuario quiere dar más contexto antes de empezar. ' +
-      'Siempre muestra un plan de trabajo al inicio de cada respuesta.',
+      '🔎 Busca en archivos JS/TS/JSX/TSX del proyecto que contengan una palabra clave. ' +
+      'Devuelve ruta relativa y las líneas que coinciden. ' +
+      'Útil para encontrar patrones de implementación, componentes reutilizables, importaciones o exports.',
     inputSchema: {
       type: 'object' as const,
       properties: {
-        mensaje: {
+        proyectoPath: {
           type: 'string',
-          description:
-            'Instrucción o solicitud para el agente mediador. Puede incluir: historia de usuario, descripción de pantalla, ruta del proyecto, etc.',
+          description: 'Ruta absoluta al directorio raíz del proyecto',
+        },
+        palabraClave: {
+          type: 'string',
+          description: 'Término de búsqueda (case-insensitive)',
+        },
+        maxResultados: {
+          type: 'number',
+          description: 'Número máximo de archivos a devolver (default: 10)',
         },
       },
-      required: ['mensaje'],
+      required: ['proyectoPath', 'palabraClave'],
     },
   },
   {
-    name: 'analisis-agente',
-    agentId: 'analisis-agente',
+    name: 'leer-archivo',
     description:
-      '🔍 Agente especializado en análisis de proyectos React/RN. Detecta: framework, estructura de carpetas, ' +
-      'path aliases TypeScript, componentes reutilizables, sistema de iconos (SVG/IconVector), ' +
-      'traducciones (i18next), integraciones analytics existentes, y gestor de paquetes (yarn/npm). ' +
-      'Clasifica cada archivo como 🟢 NUEVO / 🟡 EXTENDER / 🔴 MODIFICAR. ' +
-      'Pasa la ruta del proyecto y una descripción de lo que quieres implementar.',
+      '📄 Lee el contenido completo de uno o más archivos. ' +
+      'Úsalo para leer el código fuente de un componente, hook, configuración, navegador, etc. ' +
+      'Puedes pasar múltiples rutas a la vez.',
     inputSchema: {
       type: 'object' as const,
       properties: {
-        mensaje: {
-          type: 'string',
-          description:
-            'Ruta del proyecto a analizar y contexto de los cambios a realizar. Ejemplo: "Analiza /Users/yo/MiApp. Quiero agregar una pantalla de perfil".',
+        rutas: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Lista de rutas absolutas de los archivos a leer',
         },
       },
-      required: ['mensaje'],
+      required: ['rutas'],
     },
   },
   {
-    name: 'historias-agente',
-    agentId: 'historias-agente',
+    name: 'listar-directorio',
     description:
-      '📋 Estructura y mejora historias de usuario. Aplica formato INVEST, genera criterios de aceptación, ' +
-      'divide épicas en historias atómicas, detecta historias que modifican producción (🔴) vs nuevas (🟢), ' +
-      'y agrega banderas técnicas ([ICONO-SVG], [NUEVA-TRADUCCION], [INPUT-TEXTO]) para el agente de pantallas. ' +
-      'Acepta cualquier formato: texto libre, Markdown, JSON.',
+      '📂 Muestra el árbol de directorios de una ruta (sin node_modules/build/dist). ' +
+      'Útil para entender la estructura del proyecto antes de decidir dónde crear archivos.',
     inputSchema: {
       type: 'object' as const,
       properties: {
-        mensaje: {
+        ruta: {
           type: 'string',
-          description:
-            'Historia de usuario a revisar o descripción de funcionalidad a convertir en historia. Ejemplo: "Quiero una pantalla donde el usuario vea su saldo y pueda recargarlo".',
+          description: 'Ruta absoluta del directorio a listar',
+        },
+        profundidad: {
+          type: 'number',
+          description: 'Profundidad máxima del árbol (default: 3)',
         },
       },
-      required: ['mensaje'],
+      required: ['ruta'],
     },
   },
   {
-    name: 'pantallas-agente',
-    agentId: 'pantallas-agente',
+    name: 'ejecutar-tests',
     description:
-      '🎨 Genera componentes de pantallas React/React Native. Respeta el framework detectado (RN/Expo/Next.js/Vite), ' +
-      'usa los componentes UI del proyecto (TextCustom, ButtonCustom, BoxCustom…), genera traducciones en archivos ' +
-      'separados {feature}Es/En.json, y guarda propuestas de modificaciones en _staging/ para aprobación manual. ' +
-      'Nunca sobreescribe producción. Acepta diseños Figma como URL, base64 o ruta.',
+      '🧪 Ejecuta los tests unitarios con cobertura en el proyecto. ' +
+      'Devuelve el porcentaje de cobertura de statements y si cumple el umbral del 83%. ' +
+      'Soporta filtrar por patrón de nombre de test.',
     inputSchema: {
       type: 'object' as const,
       properties: {
-        mensaje: {
+        proyectoPath: {
+          type: 'string',
+          description: 'Ruta absoluta al directorio raíz del proyecto',
+        },
+        testPattern: {
           type: 'string',
           description:
-            'Historia de usuario procesada, descripción de la pantalla y ruta del proyecto destino.',
+            '(Opcional) Patrón para filtrar tests. Ejemplo: "LoginScreen"',
         },
       },
-      required: ['mensaje'],
+      required: ['proyectoPath'],
     },
   },
   {
-    name: 'tests-agente',
-    agentId: 'tests-agente',
+    name: 'ejecutar-standards',
     description:
-      '🧪 Genera y ejecuta tests unitarios con Jest + React Native Testing Library. ' +
-      'Verifica cobertura mínima del 83%, detecta regresiones (🔴), problemas de configuración (🟡) ' +
-      'y provee ejemplos concretos de tests por componente. Conoce los patrones críticos: hoisting de jest.mock, ' +
-      'mocks de módulos nativos, wrapping con Provider de Redux, y casteo de t() para i18next.',
+      '📐 Ejecuta el script "standards" del package.json si existe. ' +
+      'Verifica estándares de código del frontend. Si no existe el script, lista los scripts disponibles.',
     inputSchema: {
       type: 'object' as const,
       properties: {
-        mensaje: {
+        proyectoPath: {
           type: 'string',
-          description:
-            'Ruta del componente/hook a testear, o descripción de los tests a generar. Ejemplo: "Genera tests para /Users/yo/MiApp/src/screens/Perfil/index.tsx".',
+          description: 'Ruta absoluta al directorio raíz del proyecto',
         },
       },
-      required: ['mensaje'],
+      required: ['proyectoPath'],
     },
   },
   {
-    name: 'integraciones-agente',
-    agentId: 'integraciones-agente',
+    name: 'npm-audit',
     description:
-      '🔌 Configura integraciones de analytics y testing: Katalon (E2E), AppsFlyer (analytics móvil) ' +
-      'y Google Analytics. Detecta si ya existen en el proyecto, reutiliza el archivo analytics.ts si existe, ' +
-      'o crea uno. Inserta en el punto correcto (App.tsx, public/index.html, etc.) según el framework.',
+      '🛡️ Detecta vulnerabilidades de seguridad en las dependencias con npm/yarn audit. ' +
+      'Clasifica por severidad: critical, high, moderate, low.',
     inputSchema: {
       type: 'object' as const,
       properties: {
-        mensaje: {
+        proyectoPath: {
           type: 'string',
-          description:
-            'Herramienta a integrar y contexto del proyecto. Ejemplo: "Agrega AppsFlyer y GA a /Users/yo/MiApp".',
+          description: 'Ruta absoluta al directorio raíz del proyecto',
         },
       },
-      required: ['mensaje'],
+      required: ['proyectoPath'],
     },
   },
   {
-    name: 'sonarqube-agente',
-    agentId: 'sonarqube-agente',
+    name: 'escribir-archivo',
     description:
-      '🛡️ Analiza calidad y seguridad del código con SonarQube y npm audit. ' +
-      'Detecta vulnerabilidades (🔴 Crítico / 🟠 Alto / 🟡 Medio), code smells, deuda técnica y ' +
-      'dependencias con CVEs conocidos. Prioriza hallazgos y provee soluciones concretas por tipo.',
+      '💾 Escribe contenido en un archivo. ' +
+      'Si el archivo ya existe y forzar=false (default), guarda la propuesta en _staging/ para revisión manual. ' +
+      'Si forzar=true, sobreescribe directamente. Crea los directorios intermedios automáticamente.',
     inputSchema: {
       type: 'object' as const,
       properties: {
-        mensaje: {
+        ruta: {
           type: 'string',
+          description: 'Ruta absoluta del archivo a crear o actualizar',
+        },
+        contenido: {
+          type: 'string',
+          description: 'Contenido completo del archivo',
+        },
+        forzar: {
+          type: 'boolean',
           description:
-            'Ruta del proyecto o archivo a analizar. Ejemplo: "Analiza seguridad de /Users/yo/MiApp".',
+            'Si true, sobreescribe aunque el archivo ya exista (default: false)',
         },
       },
-      required: ['mensaje'],
+      required: ['ruta', 'contenido'],
     },
   },
   {
     name: 'resumen-sesion',
-    agentId: '',
     description:
-      '📊 Muestra el estado de la memoria reactiva: qué proyectos tienen contexto acumulado, ' +
-      'qué agentes ya ejecutaron, cuántos outputs están almacenados y cuándo fue la última actividad. ' +
-      'Útil para saber en qué punto del flujo está cada proyecto antes de continuar.',
+      '📊 Muestra el estado de la memoria de sesión: proyectos activos, ' +
+      'cantidad de outputs almacenados y cuándo fue la última actividad.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -222,18 +273,16 @@ const HERRAMIENTAS = [
   },
   {
     name: 'limpiar-contexto',
-    agentId: '',
     description:
-      '🗑️ Limpia la memoria reactiva de un proyecto para empezar un flujo desde cero. ' +
-      'Pasa la ruta del proyecto para limpiar solo ese, o "todo" para borrar todas las sesiones. ' +
-      'Recomendado antes de iniciar una nueva feature en un proyecto que ya tiene contexto previo.',
+      '🗑️ Limpia la memoria de sesión de un proyecto para empezar desde cero. ' +
+      'Pasa la ruta del proyecto o "todo" para limpiar todas las sesiones activas.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         mensaje: {
           type: 'string',
           description:
-            'Ruta absoluta del proyecto a limpiar, o "todo" para limpiar todas las sesiones activas.',
+            'Ruta absoluta del proyecto a limpiar, o "todo" para borrar todo.',
         },
       },
       required: ['mensaje'],
@@ -244,7 +293,7 @@ const HERRAMIENTAS = [
 // ── Servidor MCP ──────────────────────────────────────────────────────────────
 
 const server = new Server(
-  { name: 'mastra-orquestador', version: '2.0.0' },
+  { name: 'mastra-orquestador', version: '3.0.0' },
   { capabilities: { tools: {} } },
 );
 
@@ -259,300 +308,398 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
-  const herramienta = HERRAMIENTAS.find((h) => h.name === name);
-  if (!herramienta) {
+  // ── analizar-proyecto ─────────────────────────────────────────────────────
+  if (name === 'analizar-proyecto') {
+    const { proyectoPath } = args as { proyectoPath: string };
+    const info: Record<string, unknown> = {};
+
+    const pkgPath = path.join(proyectoPath, 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+      const allDeps = [
+        ...Object.keys(pkg.dependencies ?? {}),
+        ...Object.keys(pkg.devDependencies ?? {}),
+      ];
+      let framework = 'web';
+      if (allDeps.includes('expo')) framework = 'Expo (React Native)';
+      else if (allDeps.includes('react-native')) framework = 'React Native';
+      else if (allDeps.includes('next')) framework = 'Next.js';
+      else if (allDeps.includes('react'))
+        framework = allDeps.includes('vite') ? 'React + Vite' : 'React';
+
+      info.nombre = pkg.name;
+      info.version = pkg.version;
+      info.framework = framework;
+      info.scripts = pkg.scripts ?? {};
+      info.dependencias = Object.keys(pkg.dependencies ?? {});
+      info.devDependencies = Object.keys(pkg.devDependencies ?? {});
+      info.tieneStandards = !!pkg.scripts?.standards;
+      info.gestorPaquetes = fs.existsSync(path.join(proyectoPath, 'yarn.lock'))
+        ? 'yarn'
+        : 'npm';
+    }
+
+    const tsconfigPath = path.join(proyectoPath, 'tsconfig.json');
+    if (fs.existsSync(tsconfigPath)) {
+      try {
+        const tsconfig = JSON.parse(fs.readFileSync(tsconfigPath, 'utf8'));
+        info.tsAliases = Object.keys(tsconfig?.compilerOptions?.paths ?? {});
+      } catch {
+        /* invalid json */
+      }
+    }
+
+    const srcPath = path.join(proyectoPath, 'src');
+    if (fs.existsSync(srcPath)) {
+      info.estructuraSrc = fs
+        .readdirSync(srcPath)
+        .filter((f) => fs.statSync(path.join(srcPath, f)).isDirectory());
+    }
+
     return {
-      isError: true,
-      content: [{ type: 'text' as const, text: `Agente desconocido: ${name}` }],
+      content: [{ type: 'text' as const, text: JSON.stringify(info, null, 2) }],
     };
   }
 
-  const mensaje = (args as { mensaje: string }).mensaje;
-  if (!mensaje?.trim()) {
-    return {
-      isError: true,
-      content: [
-        {
-          type: 'text' as const,
-          text: 'El campo "mensaje" es requerido y no puede estar vacío.',
-        },
-      ],
-    };
-  }
-
-  // ── Tool: orquestar-flujo — pipeline completo con checklist ────────────────
-  if (name === 'orquestar-flujo') {
-    const { proyectoPath, historiasRaw, imagenFigma } = args as {
+  // ── buscar-en-codigo ──────────────────────────────────────────────────────
+  if (name === 'buscar-en-codigo') {
+    const {
+      proyectoPath,
+      palabraClave,
+      maxResultados = 10,
+    } = args as {
       proyectoPath: string;
-      historiasRaw: string;
-      imagenFigma?: string;
+      palabraClave: string;
+      maxResultados?: number;
     };
+    const srcPath = path.join(proyectoPath, 'src');
+    const archivos = readdirRecursive(srcPath, ['.js', '.jsx', '.ts', '.tsx']);
+    const resultados: { archivo: string; lineas: string }[] = [];
 
-    if (!proyectoPath?.trim() || !historiasRaw?.trim()) {
+    for (const archivo of archivos) {
+      if (resultados.length >= maxResultados) break;
+      const contenido = fs.readFileSync(archivo, 'utf8');
+      if (contenido.toLowerCase().includes(palabraClave.toLowerCase())) {
+        const lineas = contenido
+          .split('\n')
+          .map((l, i) => ({ n: i + 1, l }))
+          .filter(({ l }) =>
+            l.toLowerCase().includes(palabraClave.toLowerCase()),
+          )
+          .map(({ n, l }) => `  L${n}: ${l.trim()}`)
+          .slice(0, 5)
+          .join('\n');
+        resultados.push({ archivo: archivo.replace(proyectoPath, ''), lineas });
+      }
+    }
+
+    const texto =
+      resultados.length === 0
+        ? `No se encontró "${palabraClave}" en ${srcPath}`
+        : resultados.map((r) => `📄 ${r.archivo}\n${r.lineas}`).join('\n\n');
+
+    return { content: [{ type: 'text' as const, text: texto }] };
+  }
+
+  // ── leer-archivo ──────────────────────────────────────────────────────────
+  if (name === 'leer-archivo') {
+    const { rutas } = args as { rutas: string[] };
+    const partes: string[] = [];
+    for (const ruta of rutas) {
+      if (!fs.existsSync(ruta)) {
+        partes.push(`⚠️ No encontrado: ${ruta}`);
+        continue;
+      }
+      const contenido = fs.readFileSync(ruta, 'utf8');
+      partes.push(`📄 ${ruta}\n${'─'.repeat(60)}\n${contenido}`);
+    }
+    return { content: [{ type: 'text' as const, text: partes.join('\n\n') }] };
+  }
+
+  // ── listar-directorio ─────────────────────────────────────────────────────
+  if (name === 'listar-directorio') {
+    const { ruta, profundidad = 3 } = args as {
+      ruta: string;
+      profundidad?: number;
+    };
+    if (!fs.existsSync(ruta)) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `⚠️ Directorio no encontrado: ${ruta}`,
+          },
+        ],
+      };
+    }
+    const arbol = `${ruta}\n` + treeDir(ruta, '', profundidad);
+    return { content: [{ type: 'text' as const, text: arbol }] };
+  }
+
+  // ── ejecutar-tests ────────────────────────────────────────────────────────
+  if (name === 'ejecutar-tests') {
+    const { proyectoPath, testPattern } = args as {
+      proyectoPath: string;
+      testPattern?: string;
+    };
+    try {
+      const gestor = fs.existsSync(path.join(proyectoPath, 'yarn.lock'))
+        ? 'yarn'
+        : 'npm run';
+      const patronFlag = testPattern
+        ? ` --testPathPattern="${testPattern}"`
+        : '';
+      const cmd = `${gestor} test -- --coverage --passWithNoTests${patronFlag}`;
+      const salida = execSync(cmd, {
+        cwd: proyectoPath,
+        stdio: 'pipe',
+        timeout: 120000,
+      }).toString();
+
+      const summaryPath = path.join(
+        proyectoPath,
+        'coverage',
+        'coverage-summary.json',
+      );
+      if (fs.existsSync(summaryPath)) {
+        const cov = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+        const pct: number = cov.total?.statements?.pct ?? 0;
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `🧪 Tests ejecutados\nCobertura: ${pct}% ${pct >= 83 ? '✅' : '⚠️ (<83%)'}\n\n${salida.slice(-3000)}`,
+            },
+          ],
+        };
+      }
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `🧪 Tests OK\n\n${salida.slice(-3000)}`,
+          },
+        ],
+      };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
       return {
         isError: true,
         content: [
           {
             type: 'text' as const,
-            text: 'Se requieren proyectoPath y historiasRaw.',
+            text: `❌ Error en tests:\n${msg.slice(0, 3000)}`,
+          },
+        ],
+      };
+    }
+  }
+
+  // ── ejecutar-standards ────────────────────────────────────────────────────
+  if (name === 'ejecutar-standards') {
+    const { proyectoPath } = args as { proyectoPath: string };
+    const pkgPath = path.join(proyectoPath, 'package.json');
+    const pkg = fs.existsSync(pkgPath)
+      ? JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+      : {};
+
+    if (!pkg.scripts?.standards) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `ℹ️ Sin script "standards". Scripts disponibles:\n${Object.keys(pkg.scripts ?? {}).join(', ')}`,
           },
         ],
       };
     }
 
-    const SEP = '═'.repeat(58);
-    const SEP2 = '─'.repeat(58);
-
-    const PASOS = [
-      {
-        agentId: 'analisis-agente',
-        emoji: '🔍',
-        label: 'Análisis del proyecto',
-      },
-      {
-        agentId: 'historias-agente',
-        emoji: '📋',
-        label: 'Revisión de historias de usuario',
-      },
-      {
-        agentId: 'pantallas-agente',
-        emoji: '🎨',
-        label: 'Generación de pantallas React/RN',
-      },
-      {
-        agentId: 'tests-agente',
-        emoji: '🧪',
-        label: 'Tests unitarios y cobertura (≥83%)',
-      },
-      {
-        agentId: 'integraciones-agente',
-        emoji: '🔌',
-        label: 'Integraciones (Analytics, Katalon, AppsFlyer)',
-      },
-      {
-        agentId: 'sonarqube-agente',
-        emoji: '🛡️',
-        label: 'Análisis de seguridad / SonarQube',
-      },
-    ] as const;
-
-    // ── Plan inicial ──────────────────────────────────────────────────────────
-    let output = `📋 PLAN DE TRABAJO\n${SEP}\n`;
-    output += `📁 Proyecto  : ${proyectoPath}\n`;
-    output += `📝 Historia  : ${historiasRaw.slice(0, 100)}${historiasRaw.length > 100 ? '…' : ''}\n`;
-    if (imagenFigma) output += `🎨 Diseño    : ${imagenFigma.slice(0, 80)}\n`;
-    output += `\n`;
-    PASOS.forEach((p, i) => {
-      output += `  ⬜  Paso ${i + 1} — ${p.emoji} ${p.label}\n`;
-    });
-    output += `\n${SEP}\n⏳ Iniciando orquestación…\n\n`;
-
-    const resultados: Record<string, string> = {};
-    const estados: Record<string, '✅' | '❌'> = {};
-
-    // Mensajes iniciales de cada agente (el contexto reactivo se inyecta vía sessionStore)
-    const mensajesBase: Record<string, string> = {
-      'analisis-agente': `Analiza el proyecto en "${proyectoPath}".\n\nEl usuario quiere implementar:\n"""\n${historiasRaw}\n"""\n\nPor favor usa analizarEstructura y buscarImplementaciones para obtener información real del proyecto.`,
-      'historias-agente': `Revisa y estructura la siguiente historia de usuario para el proyecto en "${proyectoPath}":\n"""\n${historiasRaw}\n"""`,
-      'pantallas-agente': `Genera los componentes para las historias procesadas del proyecto en "${proyectoPath}".${imagenFigma ? `\n\nDiseño Figma: ${imagenFigma}` : ''}\n\nUsa la herramienta generarPantallas para crear los archivos reales.`,
-      'tests-agente': `Ejecuta los tests y verifica la cobertura del proyecto en "${proyectoPath}". Usa la herramienta ejecutarTests.`,
-      'integraciones-agente': `Aplica las integraciones de Katalon, AppsFlyer y Google Analytics al proyecto en "${proyectoPath}". Usa la herramienta insertarTags.`,
-      'sonarqube-agente': `Realiza el análisis de calidad y seguridad del proyecto en "${proyectoPath}". Usa sonarScanner y npmAudit.`,
-    };
-
-    // ── Ejecutar agentes en secuencia ─────────────────────────────────────────
-    for (const paso of PASOS) {
-      try {
-        const mensajeBase =
-          mensajesBase[paso.agentId] ?? `Proyecto: "${proyectoPath}"`;
-        const mensajeConContexto = await sessionStore.injectContext(
-          proyectoPath,
-          mensajeBase,
-        );
-        const agente = mastra.getAgent(paso.agentId);
-        const resultado = await agente.generate(mensajeConContexto);
-        resultados[paso.agentId] = resultado.text;
-        estados[paso.agentId] = '✅';
-        await sessionStore.addOutput(
-          proyectoPath,
-          paso.agentId,
-          resultado.text,
-        );
-      } catch (err) {
-        const raw = err instanceof Error ? err.message : String(err);
-        resultados[paso.agentId] = `Error al ejecutar: ${raw}`;
-        estados[paso.agentId] = '❌';
-      }
+    try {
+      const gestor = fs.existsSync(path.join(proyectoPath, 'yarn.lock'))
+        ? 'yarn'
+        : 'npm run';
+      const salida = execSync(`${gestor} standards`, {
+        cwd: proyectoPath,
+        stdio: 'pipe',
+        timeout: 60000,
+      }).toString();
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `📐 Standards OK\n\n${salida.slice(-2000)}`,
+          },
+        ],
+      };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text' as const,
+            text: `❌ Standards fallaron:\n${msg.slice(0, 2000)}`,
+          },
+        ],
+      };
     }
-
-    // ── Checklist con estado final ────────────────────────────────────────────
-    const completados = Object.values(estados).filter((e) => e === '✅').length;
-    output += `\n📋 RESUMEN DEL PLAN — ${completados} / ${PASOS.length} pasos completados\n${SEP}\n`;
-    PASOS.forEach((p, i) => {
-      const marca = estados[p.agentId] ?? '⬜';
-      output += `  ${marca}  Paso ${i + 1} — ${p.emoji} ${p.label}\n`;
-    });
-    output += `${SEP}\n`;
-
-    // ── Resultados por sección ────────────────────────────────────────────────
-    PASOS.forEach((p, i) => {
-      output += `\n${SEP2}\n${p.emoji}  PASO ${i + 1}: ${p.label.toUpperCase()}\n${SEP2}\n`;
-      output += resultados[p.agentId] ?? '⬜ No ejecutado.';
-      output += '\n';
-    });
-
-    output += `\n${SEP}\n✅ FLUJO COMPLETO — Usa resumen-sesion para ver el estado de la memoria reactiva\n${SEP}\n`;
-
-    return { content: [{ type: 'text' as const, text: output }] };
   }
 
-  // ── Tool: resumen-sesion — estado de la memoria reactiva ─────────────────
+  // ── npm-audit ─────────────────────────────────────────────────────────────
+  if (name === 'npm-audit') {
+    const { proyectoPath } = args as { proyectoPath: string };
+    const esYarn = fs.existsSync(path.join(proyectoPath, 'yarn.lock'));
+    const cmd = esYarn ? 'yarn audit --json' : 'npm audit --json';
+
+    try {
+      const output = execSync(cmd, {
+        cwd: proyectoPath,
+        stdio: 'pipe',
+        timeout: 60000,
+      }).toString();
+      const result = JSON.parse(output);
+      const vulns =
+        result.metadata?.vulnerabilities ?? result.vulnerabilities ?? {};
+      const total = Object.values(vulns).reduce(
+        (acc: number, v) => acc + (typeof v === 'number' ? v : 0),
+        0,
+      );
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text:
+              total === 0
+                ? '✅ Sin vulnerabilidades detectadas.'
+                : `⚠️ Vulnerabilidades:\n${JSON.stringify(vulns, null, 2)}`,
+          },
+        ],
+      };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // npm/yarn audit exits with non-zero when vulnerabilities exist
+      const jsonMatch = msg.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const result = JSON.parse(jsonMatch[0]);
+          const vulns =
+            result.metadata?.vulnerabilities ?? result.vulnerabilities ?? {};
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `⚠️ Vulnerabilidades encontradas:\n${JSON.stringify(vulns, null, 2)}`,
+              },
+            ],
+          };
+        } catch {
+          /* ignore parse error */
+        }
+      }
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `🛡️ npm audit:\n${msg.slice(0, 2000)}`,
+          },
+        ],
+      };
+    }
+  }
+
+  // ── escribir-archivo ──────────────────────────────────────────────────────
+  if (name === 'escribir-archivo') {
+    const {
+      ruta,
+      contenido,
+      forzar = false,
+    } = args as {
+      ruta: string;
+      contenido: string;
+      forzar?: boolean;
+    };
+
+    if (fs.existsSync(ruta) && !forzar) {
+      const stagingDir = path.join(path.dirname(ruta), '_staging');
+      const stagingPath = path.join(stagingDir, path.basename(ruta));
+      fs.mkdirSync(stagingDir, { recursive: true });
+      fs.writeFileSync(stagingPath, contenido, 'utf8');
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `⚠️ El archivo ya existe. Propuesta guardada en:\n${stagingPath}\n\nRevisa y mueve manualmente si apruebas los cambios.`,
+          },
+        ],
+      };
+    }
+
+    fs.mkdirSync(path.dirname(ruta), { recursive: true });
+    fs.writeFileSync(ruta, contenido, 'utf8');
+    return {
+      content: [{ type: 'text' as const, text: `✅ Archivo escrito: ${ruta}` }],
+    };
+  }
+
+  // ── resumen-sesion ────────────────────────────────────────────────────────
   if (name === 'resumen-sesion') {
     const { proyectoPath } = (args ?? {}) as { proyectoPath?: string };
     const sessions = await sessionStore.listSessions();
-    const SEP = '═'.repeat(58);
 
     if (sessions.length === 0) {
       return {
         content: [
-          {
-            type: 'text' as const,
-            text: `📭 No hay sesiones activas en memoria.\n\nUsa orquestar-flujo o cualquier agente especificando la ruta del proyecto para iniciar una sesión.`,
-          },
+          { type: 'text' as const, text: '📭 No hay sesiones activas.' },
         ],
       };
     }
 
-    const AGENTES_ORDEN = [
-      { id: 'analisis-agente', emoji: '🔍', label: 'Análisis' },
-      { id: 'historias-agente', emoji: '📋', label: 'Historias' },
-      { id: 'pantallas-agente', emoji: '🎨', label: 'Pantallas' },
-      { id: 'tests-agente', emoji: '🧪', label: 'Tests' },
-      { id: 'integraciones-agente', emoji: '🔌', label: 'Integraciones' },
-      { id: 'sonarqube-agente', emoji: '🛡️', label: 'Seguridad' },
-    ];
-
-    let text = `📊 MEMORIA REACTIVA — ESTADO ACTUAL\n${SEP}\n\n`;
-
-    const sessionsFiltradas = proyectoPath
+    const filtradas = proyectoPath
       ? sessions.filter((s) => s.projectPath.includes(proyectoPath))
       : sessions;
 
-    if (sessionsFiltradas.length === 0) {
-      text += `⚠️ No se encontraron sesiones para "${proyectoPath}".`;
-      return { content: [{ type: 'text' as const, text }] };
-    }
+    const texto = filtradas
+      .map(
+        (s) =>
+          `📁 ${s.projectPath}\n   Outputs: ${s.outputCount} | Última actividad: ${s.lastUpdated}`,
+      )
+      .join('\n\n');
 
-    for (const s of sessionsFiltradas) {
-      text += `📁 ${s.projectPath}\n`;
-      text += `   Outputs almacenados : ${s.outputCount}\n`;
-      text += `   Última actividad    : ${s.lastUpdated}\n`;
-
-      // Detalle de qué agentes tienen outputs
-      const details = await sessionStore.getSessionDetail(s.projectPath);
-      const agentesCon = new Set(details.map((d) => d.agentId));
-
-      text += `   Progreso del flujo  :\n`;
-      AGENTES_ORDEN.forEach((a, i) => {
-        const marca = agentesCon.has(a.id) ? '✅' : '⬜';
-        text += `     ${marca} Paso ${i + 1} — ${a.emoji} ${a.label}\n`;
-      });
-      text += '\n';
-    }
-
-    text += `${SEP}\nUsa limpiar-contexto para reiniciar una sesión antes de una nueva feature.\n`;
-    return { content: [{ type: 'text' as const, text }] };
+    return { content: [{ type: 'text' as const, text: texto }] };
   }
 
-  // ── Tool especial: limpiar contexto reactivo ─────────────────────────────
+  // ── limpiar-contexto ──────────────────────────────────────────────────────
   if (name === 'limpiar-contexto') {
+    const { mensaje } = args as { mensaje: string };
     if (mensaje.trim().toLowerCase() === 'todo') {
       await sessionStore.clearAll();
       return {
         content: [
-          {
-            type: 'text' as const,
-            text: '✅ Memoria reactiva limpiada — todas las sesiones eliminadas.',
-          },
+          { type: 'text' as const, text: '✅ Todas las sesiones eliminadas.' },
         ],
       };
     }
     const cleared = await sessionStore.clear(mensaje.trim());
-    const sessions = await sessionStore.listSessions();
-    const resumen =
-      sessions.length > 0
-        ? `Sesiones activas restantes:\n${sessions.map((s) => `  • ${s.projectPath} (${s.outputCount} outputs)`).join('\n')}`
-        : 'No hay sesiones activas.';
     return {
       content: [
         {
           type: 'text' as const,
           text: cleared
-            ? `✅ Contexto del proyecto "${mensaje.trim()}" eliminado.\n\n${resumen}`
-            : `⚠️  No se encontró sesión para "${mensaje.trim()}".\n\n${resumen}`,
+            ? `✅ Sesión "${mensaje.trim()}" eliminada.`
+            : `⚠️ No se encontró sesión para "${mensaje.trim()}".`,
         },
       ],
     };
   }
 
-  try {
-    // ── Memoria reactiva: inyectar contexto acumulado ────────────────────────
-    const projectPath = extractProjectPath(mensaje);
-    const mensajeConContexto = projectPath
-      ? await sessionStore.injectContext(projectPath, mensaje)
-      : mensaje;
-
-    const agente = mastra.getAgent(herramienta.agentId);
-    const resultado = await agente.generate(mensajeConContexto);
-
-    // ── Almacenar output para que próximos agentes lo lean ───────────────────
-    if (projectPath) {
-      await sessionStore.addOutput(
-        projectPath,
-        herramienta.agentId,
-        resultado.text,
-      );
-    }
-
-    return {
-      content: [{ type: 'text' as const, text: resultado.text }],
-    };
-  } catch (err) {
-    const raw = err instanceof Error ? err.message : String(err);
-
-    // Error de API Key no configurada → mensaje accionable
-    const sinClave =
-      raw.includes('API key') ||
-      raw.includes('api_key') ||
-      raw.includes('apiKey') ||
-      raw.includes('401') ||
-      raw.includes('Unauthorized') ||
-      raw.includes('authentication');
-
-    const mensajeError = sinClave
-      ? [
-          `⚠️  Sin modelo de IA configurado para "${name}".`,
-          ``,
-          `Crea el archivo .env en la carpeta mastra-orquestador con tu proveedor:`,
-          ``,
-          `  AI_PROVIDER=openai`,
-          `  AI_MODEL=gpt-4o`,
-          `  OPENAI_API_KEY=sk-...tu-clave...`,
-          ``,
-          `Otros proveedores soportados: anthropic, google, groq, ollama`,
-          `Ver README para detalles de configuración.`,
-        ].join('\n')
-      : `Error al ejecutar ${name}: ${raw}`;
-
-    return {
-      isError: true,
-      content: [{ type: 'text' as const, text: mensajeError }],
-    };
-  }
+  return {
+    isError: true,
+    content: [{ type: 'text' as const, text: `Tool desconocida: ${name}` }],
+  };
 });
 
-// ── Iniciar transporte stdio ──────────────────────────────────────────────────
-// Inicializar base de datos SQLite antes de aceptar requests
+// ── Iniciar servidor ──────────────────────────────────────────────────────────
+
 await sessionStore.init();
 
 const transport = new StdioServerTransport();
