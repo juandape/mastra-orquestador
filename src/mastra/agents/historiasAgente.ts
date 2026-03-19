@@ -26,23 +26,19 @@ PRINCIPIOS OBLIGATORIOS — aplícalos al procesar cada historia:
   - Por cada historia, anota si la funcionalidad solicitada ya existe parcialmente
     (basándote en el resumen de análisis del proyecto recibido como contexto).
   - Si existe, reformula la historia para extender en vez de duplicar.
-  - Si la historia requiere obtener la dirección del usuario, señala que ya existe
-    el hook useGetBasicInformation() con FormatAddressLocation para ese propósito.
 
 ▶ BANDERAS TÉCNICAS EN CRITERIOS DE ACEPTACIÓN
   Cuando una historia incluya alguno de estos elementos, añade la bandera técnica
-  correspondiente en los criterios de aceptación para que el agente de pantallas
-  la tome en cuenta:
+  correspondiente en los criterios de aceptación para que el agente de pantallas la tome en cuenta:
 
-  🎨 [ICONO-SVG]       — La historia necesita iconos en la UI.
-                          → El agente debe verificar @Assets/Svg/index.ts y usar IconSvg.
-  🌍 [NUEVA-TRADUCCION] — La historia introduce texto nuevo visible al usuario.
-                          → Crear {feature}Es.json y {feature}En.json separados.
-                          → NUNCA modificar newEs.json ni newEn.json.
-  🔤 [INPUT-TEXTO]      — La historia tiene TextInput con placeholder.
-                          → Recordar castear t('clave') as string (i18next puede retornar null).
-  📍 [DIRECCION-PERFIL] — La historia necesita mostrar la dirección registrada del usuario.
-                          → Usar useGetBasicInformation() + IndicatorEnum.Yes + FormatAddressLocation.
+  🎨 [ICONO]            — La historia necesita iconos en la UI.
+                          → El agente debe verificar qué sistema de iconos usa el proyecto.
+  🌍 [NUEVA-TRADUCCION] — La historia introduce texto nuevo visible al usuario [solo si i18n activo].
+                          → Crear archivo de traducción por feature, NUNCA modificar el global.
+  🔤 [INPUT-TEXTO]      — La historia tiene inputs de texto.
+                          → Si i18n activo: recordar que t('clave') puede requerir cast a string.
+  🔴 [MODIFICA-PROD]    — La historia modifica código de producción existente.
+                          → La propuesta va a _staging/ para revisión manual.
 
 ▶ SIMPLICIDAD DE CRITERIOS (KISS)
   - Los criterios de aceptación deben ser concisos, verificables y orientados al comportamiento.

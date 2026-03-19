@@ -339,7 +339,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         : 'npm';
     }
 
+    // Detectar lenguaje
     const tsconfigPath = path.join(proyectoPath, 'tsconfig.json');
+    info.lenguaje = fs.existsSync(tsconfigPath) ? 'typescript' : 'javascript';
     if (fs.existsSync(tsconfigPath)) {
       try {
         const tsconfig = JSON.parse(fs.readFileSync(tsconfigPath, 'utf8'));
@@ -354,6 +356,218 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       info.estructuraSrc = fs
         .readdirSync(srcPath)
         .filter((f) => fs.statSync(path.join(srcPath, f)).isDirectory());
+    }
+
+    // Detectar screensDir
+    const screensCandidates = [
+      'src/screens',
+      'src/pages',
+      'src/app',
+      'src/views',
+      'app',
+    ];
+    info.screensDir =
+      screensCandidates
+        .map((c) => path.join(proyectoPath, c))
+        .find((p) => fs.existsSync(p)) ??
+      path.join(proyectoPath, 'src', 'screens');
+
+    // Detectar i18n
+    const allDepsI18n = [
+      ...Object.keys((info as any).dependencias ?? []),
+      ...Object.keys((info as any).devDependencies ?? []),
+    ];
+    {
+      const pkgI18n = fs.existsSync(path.join(proyectoPath, 'package.json'))
+        ? JSON.parse(
+            fs.readFileSync(path.join(proyectoPath, 'package.json'), 'utf8'),
+          )
+        : {};
+      const deps18n = {
+        ...(pkgI18n.dependencies ?? {}),
+        ...(pkgI18n.devDependencies ?? {}),
+      };
+      let i18nLib = 'ninguna';
+      if ('react-i18next' in deps18n || 'i18next' in deps18n)
+        i18nLib = 'react-i18next';
+      else if ('react-intl' in deps18n) i18nLib = 'react-intl';
+      else if ('@lingui/react' in deps18n) i18nLib = 'lingui';
+      else if ('next-intl' in deps18n) i18nLib = 'next-intl';
+      else if ('vue-i18n' in deps18n) i18nLib = 'vue-i18n';
+
+      // Detectar carpeta de traducciones
+      const i18nCandidates = [
+        'src/locales',
+        'src/i18n',
+        'src/translations',
+        'locales',
+        'public/locales',
+      ];
+      const carpetaTraduccion =
+        i18nCandidates
+          .map((c) => path.join(proyectoPath, c))
+          .find((p) => fs.existsSync(p)) ?? '';
+
+      info.i18n = {
+        libreria: i18nLib,
+        patron: i18nLib !== 'ninguna' ? 'detectado' : 'ninguno',
+        carpetaTraduccion,
+      };
+    }
+
+    // Detectar analytics
+    {
+      const pkgAn = fs.existsSync(path.join(proyectoPath, 'package.json'))
+        ? JSON.parse(
+            fs.readFileSync(path.join(proyectoPath, 'package.json'), 'utf8'),
+          )
+        : {};
+      const depsAn = {
+        ...(pkgAn.dependencies ?? {}),
+        ...(pkgAn.devDependencies ?? {}),
+      };
+      const firebase =
+        '@react-native-firebase/analytics' in depsAn || 'firebase' in depsAn;
+      const googleAnalytics =
+        'react-ga4' in depsAn || 'react-ga' in depsAn || 'gtag' in depsAn;
+      const appsFlyer = 'react-native-appsflyer' in depsAn;
+      const mixpanel =
+        'mixpanel-browser' in depsAn || 'react-native-mixpanel' in depsAn;
+
+      // Detectar hook centralizado de analytics buscando patrones en src/
+      let patron = 'ninguno';
+      if (firebase || googleAnalytics || appsFlyer || mixpanel) {
+        patron = 'directo'; // fallback si no se encuentra hook centralizado
+        try {
+          const analyticsHookPatterns = [
+            'useEventTracker',
+            'useAnalytics',
+            'useTracking',
+            'useTracker',
+          ];
+          const srcFiles = fs.existsSync(srcPath)
+            ? readdirRecursive(srcPath, ['.ts', '.tsx', '.js', '.jsx'])
+            : [];
+          for (const file of srcFiles.slice(0, 200)) {
+            const content = fs.readFileSync(file, 'utf8');
+            for (const hookName of analyticsHookPatterns) {
+              if (content.includes(`export`) && content.includes(hookName)) {
+                patron = hookName;
+                break;
+              }
+            }
+            if (patron !== 'directo') break;
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+
+      info.analytics = {
+        firebase,
+        googleAnalytics,
+        appsFlyer,
+        mixpanel,
+        patron,
+      };
+    }
+
+    // Detectar testing
+    {
+      const pkgT = fs.existsSync(path.join(proyectoPath, 'package.json'))
+        ? JSON.parse(
+            fs.readFileSync(path.join(proyectoPath, 'package.json'), 'utf8'),
+          )
+        : {};
+      const depsT = {
+        ...(pkgT.dependencies ?? {}),
+        ...(pkgT.devDependencies ?? {}),
+      };
+      let testLib = 'ninguna';
+      if ('@testing-library/react-native' in depsT)
+        testLib = '@testing-library/react-native';
+      else if ('@testing-library/react' in depsT)
+        testLib = '@testing-library/react';
+      else if ('enzyme' in depsT) testLib = 'enzyme';
+      const framework2 = 'vitest' in depsT ? 'vitest' : 'jest';
+
+      // Leer umbral de cobertura del jest.config.js/ts — pero siempre mínimo 83
+      let umbralCobertura = 83;
+      const jestConfigCandidates = [
+        'jest.config.js',
+        'jest.config.ts',
+        'jest.config.mjs',
+      ];
+      for (const cfg of jestConfigCandidates) {
+        const cfgPath = path.join(proyectoPath, cfg);
+        if (fs.existsSync(cfgPath)) {
+          const cfgContent = fs.readFileSync(cfgPath, 'utf8');
+          const match = cfgContent.match(/statements['"]*\s*:\s*(\d+)/);
+          if (match) {
+            const configured = parseInt(match[1], 10);
+            umbralCobertura = Math.max(configured, 83);
+          }
+          break;
+        }
+      }
+
+      info.testing = {
+        libreria: testLib,
+        framework: framework2,
+        umbralCobertura,
+      };
+    }
+
+    // Detectar componentes UI
+    {
+      const pkgC = fs.existsSync(path.join(proyectoPath, 'package.json'))
+        ? JSON.parse(
+            fs.readFileSync(path.join(proyectoPath, 'package.json'), 'utf8'),
+          )
+        : {};
+      const depsC = {
+        ...(pkgC.dependencies ?? {}),
+        ...(pkgC.devDependencies ?? {}),
+      };
+      let ui = 'primitivos';
+      if ('native-base' in depsC) ui = 'nativebase';
+      else if ('@mui/material' in depsC) ui = 'mui';
+      else if ('tailwindcss' in depsC || 'nativewind' in depsC) ui = 'tailwind';
+      else if ('@chakra-ui/react' in depsC) ui = 'chakra';
+      else if ('@shadcn/ui' in depsC || 'shadcn' in depsC) ui = 'shadcn';
+
+      // Detectar componentes custom buscando patrones en src/components
+      let patronCustom = '';
+      const componentsDir = path.join(proyectoPath, 'src', 'components');
+      if (fs.existsSync(componentsDir)) {
+        try {
+          const files = readdirRecursive(
+            componentsDir,
+            ['.tsx', '.ts', '.jsx', '.js'],
+            2,
+          );
+          const customNames: string[] = [];
+          for (const file of files.slice(0, 50)) {
+            const content = fs.readFileSync(file, 'utf8');
+            const exportMatch = content.match(
+              /export\s+(?:const|function)\s+([\w]+Custom[\w]*|Custom[\w]+)/g,
+            );
+            if (exportMatch) {
+              exportMatch.forEach((m) => {
+                const name = m
+                  .replace(/export\s+(?:const|function)\s+/, '')
+                  .trim();
+                if (!customNames.includes(name)) customNames.push(name);
+              });
+            }
+          }
+          patronCustom = customNames.slice(0, 10).join(', ');
+        } catch {
+          /* ignore */
+        }
+      }
+
+      info.componentes = { ui, patronCustom };
     }
 
     return {

@@ -7,12 +7,18 @@ import path from 'path';
 export const ejecutarTestsTool = createTool({
   id: 'ejecutar-tests',
   description:
-    'Ejecuta los tests unitarios del proyecto con cobertura y devuelve el porcentaje de cobertura de statements.',
+    'Ejecuta los tests unitarios del proyecto con cobertura y devuelve el porcentaje de cobertura de statements. Usa yarn si hay yarn.lock, npm en caso contrario.',
   inputSchema: z.object({
     proyectoPath: z
       .string()
       .describe(
         'Ruta absoluta al directorio raíz del proyecto donde correr los tests',
+      ),
+    testPattern: z
+      .string()
+      .optional()
+      .describe(
+        '(Opcional) Patrón para filtrar tests por nombre de archivo. Ejemplo: "RequestCardScreen"',
       ),
   }),
   outputSchema: z.object({
@@ -22,12 +28,20 @@ export const ejecutarTestsTool = createTool({
     error: z.string().optional(),
   }),
   execute: async ({ context }) => {
-    const { proyectoPath } = context;
+    const { proyectoPath, testPattern } = context;
 
     try {
-      execSync('npm test -- --coverage --json --outputFile=coverage.json', {
+      const esYarn = fs.existsSync(path.join(proyectoPath, 'yarn.lock'));
+      const gestor = esYarn ? 'yarn' : 'npm run';
+      const patronFlag = testPattern
+        ? ` --testPathPattern="${testPattern}"`
+        : '';
+      const cmd = `${gestor} test -- --coverage --passWithNoTests${patronFlag}`;
+
+      execSync(cmd, {
         cwd: proyectoPath,
         stdio: 'pipe',
+        timeout: 180000,
       });
 
       const summaryPath = path.join(
@@ -45,15 +59,15 @@ export const ejecutarTestsTool = createTool({
       }
 
       const coverage = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
-      const pct: number = coverage.total.statements.pct;
+      const pct: number = coverage.total?.statements?.pct ?? 0;
       const cumple = pct >= 83;
 
       return {
         cobertura: pct,
         cumpleUmbral: cumple,
         mensaje: cumple
-          ? `Cobertura OK: ${pct}% (umbral: 83%)`
-          : `Cobertura insuficiente: ${pct}% < 83%. Mejora los tests.`,
+          ? `✅ Cobertura OK: ${pct}% (umbral: 83%)`
+          : `⚠️ Cobertura insuficiente: ${pct}% < 83%. Mejora los tests.`,
       };
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -61,7 +75,7 @@ export const ejecutarTestsTool = createTool({
         cobertura: 0,
         cumpleUmbral: false,
         mensaje: 'Error al ejecutar tests.',
-        error: msg,
+        error: msg.slice(0, 3000),
       };
     }
   },

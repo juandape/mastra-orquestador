@@ -4,6 +4,8 @@
   "description": "Orquestador de agentes IA con Mastra para proyectos React/React Native — uso vía MCP con GitHub Copilot",
   "type": "module",
   "scripts": {
+    "setup": "node scripts/setup.js",
+    "doctor": "node scripts/doctor.js",
     "mcp": "tsx src/mcp-server.ts",
     "build": "tsc --project tsconfig.json",
     "type-check": "tsc --noEmit"

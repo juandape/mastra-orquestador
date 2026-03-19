@@ -43,7 +43,7 @@ export const ejecutarNpmAuditTool = createTool({
       .describe('Ruta absoluta al directorio raíz del proyecto'),
   }),
   outputSchema: z.object({
-    vulnerabilidades: z.record(z.unknown()),
+    vulnerabilidades: z.record(z.string(), z.unknown()),
     mensaje: z.string(),
     error: z.string().optional(),
   }),
