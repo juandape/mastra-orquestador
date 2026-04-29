@@ -5,3 +5,6 @@ export { mediadorAgente } from './mediadorAgente.js';
 export { pantallasAgente } from './pantallasAgente.js';
 export { sonarqubeAgente } from './sonarqubeAgente.js';
 export { testsAgente } from './testsAgente.js';
+export { coredceAgente } from './coredceAgente.js';
+export { coredceEntitiesAgente } from './coredceEntitiesAgente.js';
+export { coredceReposAgente } from './coredceReposAgente.js';

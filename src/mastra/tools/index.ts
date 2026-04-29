@@ -14,3 +14,5 @@ export {
   ejecutarSonarScannerTool,
   ejecutarNpmAuditTool,
 } from './sonarqubeTools.js';
+
+export { coredceGenerateFromContractTool } from './coredceTools.js';

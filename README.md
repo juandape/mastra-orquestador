@@ -357,10 +357,94 @@ el contexto de cada agente.
 | `integraciones-agente` | Configurar analytics (Katalon, AppsFlyer, GA)             | `buscar-en-codigo`, `leer-archivo`, `escribir-archivo`        |
 | `sonarqube-agente`     | Revisar seguridad y calidad del código                    | `npm-audit`, `buscar-en-codigo`                               |
 
+**Nuevo: Generador CoreDCE**
+
+Este repositorio incluye ahora un agente y una tool para generar la estructura mínima CoreDCE a partir de un contrato OpenAPI/JSON proporcionado por el backend.
+
+- Palabra clave para activar: `@coredce` (en el chat de Copilot o dentro del flujo del `mediador-agente`).
+- Tool MCP: `coredce-generate-from-contract` — acepta `{ proyectoPath, contractPathOrUrl, force }`.
+- Agente: `coredce-agente` — flujo interactivo que pregunta por la ruta del contrato, la ruta del proyecto y si forzar sobrescritura.
+
+Qué genera:
+
+- `src/core/domain/entities/{resource}.ts` (tipos Request/Response básicos con TODOs para mapear campos)
+- `src/core/domain/interfaces/{resource}.interface.ts` (interfaz del repositorio)
+- `src/core/infraestructure/repositories/{resource}.repositoryImp.ts` (implementación que llama a `sendRequest`)
+- `src/core/infraestructure/controllers/{resource}.controller.ts` (wrapper/controller básico)
+
+Modo de uso (Copilot / VS Code):
+
+1. Abre el workspace con `mastra-orquestador` y tu proyecto CoreDCE en la misma ventana.
+2. En el chat de Copilot en modo Agent escribe, por ejemplo:
+
+```
+@coredce
+contrato: ./specs/customer-api.json
+proyecto: /ruta/al/BluCoreDCE
+forzar: no
+```
+
+3. Copilot invocará la tool y te devolverá la lista de archivos creados o propuestos en `_staging/`.
+
+Modo autónomo (modelo externo):
+
+1. Configura `.env` con tu proveedor (`AI_PROVIDER`, `AI_MODEL`, `API_KEY`).
+2. Usa el `coredce-agente` directamente (preguntará interactivamente). El flujo es idéntico al de Copilot.
+
+Notas finales:
+
+- Los archivos generados tienen `TODO` que deben completarse (tipos precisos, validaciones, mapeos). Revísalos antes de integrar en producción.
+- El comportamiento por defecto es prudente: no sobreescribe archivos existentes sin confirmación.
+
 > **Nota sobre SonarQube:** La ejecución de `sonar-scanner` (análisis completo) requiere
 > que los agentes Mastra tengan modelo externo configurado en `.env`. Con solo Copilot,
 > el `sonarqube-agente` puede revisar patrones problemáticos y ejecutar `npm-audit`,
 > pero no lanza el servidor de SonarQube.
+
+### Ejemplos concretos (servicios InterestAccount)
+
+Se añadieron ejemplos reales de servicios que el generador puede crear automáticamente desde un contrato o muestras JSON. Ejemplos implementados en BluCoreDCE:
+
+- `POST /api/cbf-loandepo-interest-account/v0/payment-history`
+  - Request mínimo:
+
+```json
+{
+   "savingsAccountFacility": {
+      "accountReference": { "accountIdentification": "1234567890" }
+   }
+}
+```
+
+- Response (simplificada):
+
+```json
+{
+   "savingsAccountFacility": {
+      "interest": {
+         "paymentHistory": { "paymentDate": "2026-01-01", "paidAmount": 100, "narrative": "payment", "currency": "USD" }
+      }
+   }
+}
+```
+
+- `POST /api/cbf-loandepo-interest-account/v0/amount-range-projection`
+  - Request: igual que el ejemplo anterior.
+  - Response: incluye `interestRateReference` con `monthlyInterest`, `intervals`, `minimumInterest`/`maximumInterest`.
+
+- `POST /api/cbf-loandepo-interest-account/v0/accrued-detail`
+  - Request: igual que el ejemplo anterior.
+  - Response: `interestRateReference` con rangos: `interestRateRange10k`, `interestRateRange50k`, `interestRateRange100k`, `interestRateRange200k`, `interestRateRange2m`, `interestRateRangeOver2m`.
+
+Flujo recomendado tras generar:
+
+1. Ejecuta `@coredce` y proporciona la ruta del contrato (o un JSON mínimo) y la ruta del proyecto CoreDCE.
+2. Revisa los archivos generados en `_staging/` si aplicó, o los creados directamente.
+3. Para validar los tests y la cobertura, ejecuta el agente de pruebas desde el chat: `tests-agente` (o usa la herramienta `ejecutar-tests` con el patrón correspondiente).
+
+Estos ejemplos ya tienen implementaciones de plantilla y tests unitarios en BluCoreDCE como punto de partida; siempre revisa y adapta los TODOs y tipos generados antes de integrar a producción.
+
+> Consejo: Si sólo quieres generar las entidades o los repositorios, usa las palabras claves `@coredce-entities` y `@coredce-repos` respectivamente.
 
 #### Ejemplos de uso directo por agente
 

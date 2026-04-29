@@ -38,6 +38,7 @@ import {
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
+import { coredceGenerateFromContractTool } from './mastra/tools/coredceTools.js';
 
 // ── Helpers internos ──────────────────────────────────────────────────────────
 
@@ -286,6 +287,36 @@ const HERRAMIENTAS = [
         },
       },
       required: ['mensaje'],
+    },
+  },
+  {
+    name: 'coredce-generate-from-contract',
+    description:
+      'Parsa un contrato OpenAPI/JSON (local o URL) y genera entidades, interfaces, repositorios y controllers en un proyecto CoreDCE siguiendo las convenciones del repositorio.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        proyectoPath: {
+          type: 'string',
+          description:
+            'Ruta absoluta al repositorio CoreDCE donde crear la estructura',
+        },
+        contractPathOrUrl: {
+          type: 'string',
+          description:
+            'Ruta local o URL del contrato OpenAPI/JSON proporcionado por el backend',
+        },
+        force: {
+          type: 'boolean',
+          description:
+            'Si true, fuerza overwrite con backup (backup-overwrite)',
+        },
+        only: {
+          type: 'string',
+          description: 'Opcional: entities|repos|controllers|all',
+        },
+      },
+      required: ['proyectoPath', 'contractPathOrUrl'],
     },
   },
 ] as const;
@@ -904,6 +935,48 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         },
       ],
     };
+  }
+
+  // ── coredce-generate-from-contract ───────────────────────────────────────
+  if (name === 'coredce-generate-from-contract') {
+    const {
+      proyectoPath,
+      contractPathOrUrl,
+      force = false,
+      only,
+    } = args as {
+      proyectoPath: string;
+      contractPathOrUrl: string;
+      force?: boolean;
+      only?: string;
+    };
+
+    try {
+      const resultado = await coredceGenerateFromContractTool.execute({
+        context: { proyectoPath, contractPathOrUrl, force, only },
+      });
+
+      // Devolver resultado como texto JSON para que Copilot lo muestre
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(resultado, null, 2),
+          },
+        ],
+      };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text' as const,
+            text: `❌ Error al ejecutar coredce-generate-from-contract: ${msg}`,
+          },
+        ],
+      };
+    }
   }
 
   return {
