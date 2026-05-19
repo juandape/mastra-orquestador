@@ -68,7 +68,8 @@ function parseOpenApiSpec(spec: any) {
 export const coredceGenerateFromContractTool = createTool({
   id: 'coredce-generate-from-contract',
   description:
-    'Parsa un contrato OpenAPI/JSON (local o URL) y genera entidades, interfaces, repositorios y controllers en un proyecto CoreDCE siguiendo las convenciones existentes.',
+    'Parsa un contrato OpenAPI/JSON (local o URL) y genera entidades, interfaces, repositorios y controllers en un proyecto CoreDCE siguiendo las convenciones existentes. ' +
+    'Opcionalmente genera el archivo de mutación del front (BluPersonasApp) con el patrón genérico de @dcefront/coredce.',
   inputSchema: z.object({
     proyectoPath: z
       .string()
@@ -95,13 +96,34 @@ export const coredceGenerateFromContractTool = createTool({
       .describe(
         'Si se especifica, limita la generación a una parte: entities|repos|controllers|all',
       ),
+    frontPath: z
+      .string()
+      .optional()
+      .describe(
+        'Ruta absoluta al proyecto front (BluPersonasApp) para generar el archivo de mutación. ' +
+          'Si se omite, no se genera el archivo del front.',
+      ),
+    featureName: z
+      .string()
+      .optional()
+      .describe(
+        'Nombre descriptivo de la feature (ej: interestAccount, transfers). ' +
+          'Se usa para nombrar el archivo de mutación del front y el controller exportado.',
+      ),
   }),
   outputSchema: z.object({
     createdFiles: z.array(z.string()),
     message: z.string(),
   }),
   execute: async ({ context }) => {
-    const { proyectoPath, contractPathOrUrl, force, only } = context;
+    const {
+      proyectoPath,
+      contractPathOrUrl,
+      force,
+      only,
+      frontPath,
+      featureName,
+    } = context;
 
     // validar proyecto
     if (!fs.existsSync(proyectoPath)) {
@@ -243,7 +265,7 @@ export const coredceGenerateFromContractTool = createTool({
         );
       }
 
-      // controller
+      // controller — clase estática siguiendo el patrón de CoreDCE
       if (!only || only === 'controllers' || only === 'all') {
         const controllerPath = path.join(
           proyectoPath,
@@ -253,7 +275,31 @@ export const coredceGenerateFromContractTool = createTool({
           'controllers',
           `${safeName}.controller.ts`,
         );
-        const controllerContent = `import { ${pascal}Repository } from '../../domain/interfaces/${safeName}.interface'\n\nexport const create${pascal}Controller = (repo: ${pascal}Repository) => ({\n  async execute(data: any) {\n    return await repo.${safeName}(data)\n  },\n})\n`;
+        const controllerContent = [
+          `import { CodesSystem, MessagesSystem } from '../../../helpers/Constants'`,
+          `import { AsyncApiResponse } from '../dataSources/response.model'`,
+          `import { ApiRequestException, makeError } from '../dataSources/sendRequest'`,
+          `import { ${pascal}RepositoryImp } from '../repositories/${safeName}.repositoryImp'`,
+          `import { ${pascal}Request, ${pascal}Response } from '../../domain/entities/${safeName}'`,
+          ``,
+          `const repository = new ${pascal}RepositoryImp()`,
+          ``,
+          `export class ${pascal}Controller {`,
+          `  static async execute(`,
+          `    body: ${pascal}Request`,
+          `  ): AsyncApiResponse<${pascal}Response> {`,
+          `    try {`,
+          `      return await repository.${safeName}(body)`,
+          `    } catch (e) {`,
+          `      if (e instanceof ApiRequestException) return e.getError()`,
+          `      return makeError(CodesSystem.CODE_ERROR, MessagesSystem.CUSTOM_ERROR, e)`,
+          `    }`,
+          `  }`,
+          `}`,
+          ``,
+          `export default ${pascal}Controller`,
+          ``,
+        ].join('\n');
         createdFiles.push(
           writeFileSafe(
             controllerPath,
@@ -263,6 +309,96 @@ export const coredceGenerateFromContractTool = createTool({
           ).finalPath,
         );
       }
+    }
+
+    // ── Generar archivo de mutación del front (genérico) ──────────────────
+    if (frontPath && fs.existsSync(frontPath) && endpoints.length > 0) {
+      const feature =
+        featureName ?? safeFileName(endpoints[0]?.operationId ?? 'feature');
+      const featurePascal = pascalCase(feature);
+
+      // Separar endpoints en queries (GET) y mutations (POST/PUT/PATCH/DELETE)
+      const queryEndpoints = endpoints.filter(
+        (ep) => ep.method.toUpperCase() === 'GET',
+      );
+      const mutationEndpoints = endpoints.filter(
+        (ep) => ep.method.toUpperCase() !== 'GET',
+      );
+
+      // Construir imports de entidades y controller
+      const entityImports = endpoints.flatMap((ep) => {
+        const pascal = pascalCase(ep.operationId);
+        return [`${pascal}Request`, `${pascal}Response`];
+      });
+
+      const importLines = [
+        `import { createQuery, createMutation } from '@Mutations/mutationCore.mutation'`,
+        `import {`,
+        `  ApiResponse,`,
+        `  ${featurePascal}Controller,`,
+        // Only add KEYS_ if we have query endpoints
+        ...(queryEndpoints.length > 0
+          ? [`  KEYS_${feature.toUpperCase().replace(/-/g, '_')},`]
+          : []),
+        `  ${entityImports.join(',\n  ')},`,
+        `} from '@dcefront/coredce'`,
+      ].join('\n');
+
+      const mutationLines: string[] = [];
+
+      for (const ep of queryEndpoints) {
+        const pascal = pascalCase(ep.operationId);
+        const methodName = ep.operationId;
+        const keyName = safeFileName(ep.operationId).replace(/-/g, '_');
+        mutationLines.push(
+          `  // Query automática (GET) — se ejecuta cuando los params están disponibles`,
+          `  ${methodName}: createQuery<${pascal}Request, ApiResponse<${pascal}Response>>(`,
+          `    KEYS_${feature.toUpperCase().replace(/-/g, '_')}.${keyName},`,
+          `    ${featurePascal}Controller.${methodName}`,
+          `  ),`,
+        );
+      }
+
+      for (const ep of mutationEndpoints) {
+        const pascal = pascalCase(ep.operationId);
+        const methodName = ep.operationId;
+        mutationLines.push(
+          `  // Mutation (${ep.method.toUpperCase()}) — se ejecuta on-demand`,
+          `  ${methodName}: createMutation<${pascal}Request, ApiResponse<${pascal}Response>>(`,
+          `    ${featurePascal}Controller.${methodName}`,
+          `  ),`,
+        );
+      }
+
+      const frontMutationContent = [
+        `// Auto-generado por mastra-orquestador`,
+        `// Patrón: importar controllers y tipos SIEMPRE desde '@dcefront/coredce'`,
+        `// NO importar desde node_modules de terceros ni rutas relativas al CoreDCE`,
+        importLines,
+        ``,
+        `const ${feature}Mutation = () => ({`,
+        ...mutationLines,
+        `})`,
+        ``,
+        `export default ${feature}Mutation`,
+        ``,
+      ].join('\n');
+
+      const frontMutationsDir = path.join(frontPath, 'src', 'mutations');
+      if (!fs.existsSync(frontMutationsDir)) {
+        fs.mkdirSync(frontMutationsDir, { recursive: true });
+      }
+      const frontMutationPath = path.join(
+        frontMutationsDir,
+        `${feature}.mutation.ts`,
+      );
+      const frontResult = writeFileSafe(
+        frontMutationPath,
+        frontMutationContent,
+        force ? 'backup-overwrite' : 'create-only',
+        frontPath,
+      );
+      createdFiles.push(frontResult.finalPath);
     }
 
     const mensaje = `Generación completada. Archivos escritos o propuestos en _staging/: ${createdFiles.length} elementos.`;

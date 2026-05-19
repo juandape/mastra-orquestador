@@ -8,3 +8,5 @@ export { testsAgente } from './testsAgente.js';
 export { coredceAgente } from './coredceAgente.js';
 export { coredceEntitiesAgente } from './coredceEntitiesAgente.js';
 export { coredceReposAgente } from './coredceReposAgente.js';
+export { interestAccountAgente } from './interestAccountAgente.js';
+export { blupersonasIntegrationAgente } from './blupersonasIntegrationAgente.js';

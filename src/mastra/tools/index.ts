@@ -16,3 +16,11 @@ export {
 } from './sonarqubeTools.js';
 
 export { coredceGenerateFromContractTool } from './coredceTools.js';
+
+export { invokeHttpEndpointTool } from './httpTools.js';
+
+export {
+  getPaymentHistoryTool,
+  getAmountRangeProjectionTool,
+  getAccruedDetailTool,
+} from './interestAccountTools.js';

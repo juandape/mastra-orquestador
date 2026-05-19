@@ -39,6 +39,12 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import { coredceGenerateFromContractTool } from './mastra/tools/coredceTools.js';
+import {
+  getPaymentHistoryTool,
+  getAmountRangeProjectionTool,
+  getAccruedDetailTool,
+} from './mastra/tools/interestAccountTools.js';
+import { invokeHttpEndpointTool } from './mastra/tools/httpTools.js';
 
 // ── Helpers internos ──────────────────────────────────────────────────────────
 
@@ -292,7 +298,9 @@ const HERRAMIENTAS = [
   {
     name: 'coredce-generate-from-contract',
     description:
-      'Parsa un contrato OpenAPI/JSON (local o URL) y genera entidades, interfaces, repositorios y controllers en un proyecto CoreDCE siguiendo las convenciones del repositorio.',
+      'Parsa un contrato OpenAPI/JSON (local o URL) y genera entidades, interfaces, repositorios y controllers en un proyecto CoreDCE. ' +
+      'Opcionalmente genera el archivo de mutación del front (BluPersonasApp) con el patrón genérico de @dcefront/coredce: ' +
+      'usa createQuery para GET y createMutation para POST/PUT/PATCH/DELETE, importando SIEMPRE desde @dcefront/coredce.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -315,8 +323,128 @@ const HERRAMIENTAS = [
           type: 'string',
           description: 'Opcional: entities|repos|controllers|all',
         },
+        frontPath: {
+          type: 'string',
+          description:
+            'Ruta absoluta al proyecto front (BluPersonasApp) para generar el archivo de mutación genérico. Omitir si no se requiere.',
+        },
+        featureName: {
+          type: 'string',
+          description:
+            'Nombre de la feature en camelCase (ej: interestAccount, transfers). Se usa para nombrar el archivo de mutación.',
+        },
       },
       required: ['proyectoPath', 'contractPathOrUrl'],
+    },
+  },
+  {
+    name: 'invoke-http-endpoint',
+    description:
+      '🌐 Realiza una petición HTTP genérica (GET/POST/PUT/PATCH/DELETE) contra cualquier backend. ' +
+      'Útil para probar endpoints, integrar APIs o verificar respuestas sin necesidad de un modelo IA.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        apiBaseUrl: {
+          type: 'string',
+          description: 'Base URL del backend (ej: http://localhost:3000)',
+        },
+        path: {
+          type: 'string',
+          description: 'Ruta del endpoint (ej: /api/users)',
+        },
+        method: {
+          type: 'string',
+          description:
+            'Método HTTP: GET | POST | PUT | PATCH | DELETE (default: POST)',
+        },
+        headers: {
+          type: 'object',
+          description: 'Headers adicionales como objeto clave-valor',
+        },
+        body: {
+          type: 'object',
+          description: 'Payload del request (JSON)',
+        },
+        params: {
+          type: 'object',
+          description: 'Query params como objeto clave-valor',
+        },
+        timeout: {
+          type: 'number',
+          description: 'Timeout en ms (default: 15000)',
+        },
+      },
+      required: ['apiBaseUrl', 'path'],
+    },
+  },
+  {
+    name: 'interest-account-get-payment-history',
+    description:
+      'Llama al endpoint /api/cbf-loandepo-interest-account/v0/payment-history. Requiere apiBaseUrl y body.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        apiBaseUrl: {
+          type: 'string',
+          description: 'Base URL del backend (ej: http://localhost:3000)',
+        },
+        body: {
+          type: 'object',
+          description: 'Payload JSON del request',
+        },
+        timeout: {
+          type: 'number',
+          description: 'Timeout en ms (opcional)',
+        },
+      },
+      required: ['apiBaseUrl', 'body'],
+    },
+  },
+  {
+    name: 'interest-account-get-amount-range-projection',
+    description:
+      'Llama al endpoint /api/cbf-loandepo-interest-account/v0/amount-range-projection. Requiere apiBaseUrl y body.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        apiBaseUrl: {
+          type: 'string',
+          description: 'Base URL del backend (ej: http://localhost:3000)',
+        },
+        body: {
+          type: 'object',
+          description: 'Payload JSON del request',
+        },
+        timeout: {
+          type: 'number',
+          description: 'Timeout en ms (opcional)',
+        },
+      },
+      required: ['apiBaseUrl', 'body'],
+    },
+  },
+  {
+    name: 'interest-account-get-accrued-detail',
+    description:
+      'Llama al endpoint /api/cbf-loandepo-interest-account/v0/accrued-detail. Requiere apiBaseUrl y body.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        apiBaseUrl: {
+          type: 'string',
+          description: 'Base URL del backend (ej: http://localhost:3000)',
+        },
+        body: {
+          type: 'object',
+          description: 'Payload JSON del request',
+        },
+        timeout: {
+          type: 'number',
+          description: 'Timeout en ms (opcional)',
+        },
+      },
+      required: ['apiBaseUrl', 'body'],
     },
   },
 ] as const;
@@ -936,6 +1064,166 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       ],
     };
   }
+  // ── invoke-http-endpoint ──────────────────────────────────────────────────
+  if (name === 'invoke-http-endpoint') {
+    const {
+      apiBaseUrl,
+      path: endpointPath,
+      method = 'POST',
+      headers = {},
+      body,
+      params,
+      timeout = 15000,
+    } = args as {
+      apiBaseUrl: string;
+      path: string;
+      method?: string;
+      headers?: Record<string, string>;
+      body?: unknown;
+      params?: unknown;
+      timeout?: number;
+    };
+    try {
+      const resultado = await invokeHttpEndpointTool.execute({
+        context: {
+          apiBaseUrl,
+          path: endpointPath,
+          method,
+          headers,
+          body,
+          params,
+          timeout,
+        },
+      });
+      return {
+        content: [
+          { type: 'text' as const, text: JSON.stringify(resultado, null, 2) },
+        ],
+      };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text' as const,
+            text: `❌ Error en invoke-http-endpoint: ${msg}`,
+          },
+        ],
+      };
+    }
+  }
+
+  // ── interest-account-get-payment-history ───────────────────────────────
+  if (name === 'interest-account-get-payment-history') {
+    const {
+      apiBaseUrl,
+      body,
+      timeout = 15000,
+    } = args as {
+      apiBaseUrl: string;
+      body: any;
+      timeout?: number;
+    };
+    try {
+      const resultado = await getPaymentHistoryTool.execute({
+        context: { apiBaseUrl, body, timeout },
+      });
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(resultado, null, 2),
+          },
+        ],
+      };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text' as const,
+            text: `❌ Error en interest-account-get-payment-history: ${msg}`,
+          },
+        ],
+      };
+    }
+  }
+
+  // ── interest-account-get-amount-range-projection ───────────────────────
+  if (name === 'interest-account-get-amount-range-projection') {
+    const {
+      apiBaseUrl,
+      body,
+      timeout = 15000,
+    } = args as {
+      apiBaseUrl: string;
+      body: any;
+      timeout?: number;
+    };
+    try {
+      const resultado = await getAmountRangeProjectionTool.execute({
+        context: { apiBaseUrl, body, timeout },
+      });
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(resultado, null, 2),
+          },
+        ],
+      };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text' as const,
+            text: `❌ Error en interest-account-get-amount-range-projection: ${msg}`,
+          },
+        ],
+      };
+    }
+  }
+
+  // ── interest-account-get-accrued-detail ────────────────────────────────
+  if (name === 'interest-account-get-accrued-detail') {
+    const {
+      apiBaseUrl,
+      body,
+      timeout = 15000,
+    } = args as {
+      apiBaseUrl: string;
+      body: any;
+      timeout?: number;
+    };
+    try {
+      const resultado = await getAccruedDetailTool.execute({
+        context: { apiBaseUrl, body, timeout },
+      });
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(resultado, null, 2),
+          },
+        ],
+      };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text' as const,
+            text: `❌ Error en interest-account-get-accrued-detail: ${msg}`,
+          },
+        ],
+      };
+    }
+  }
 
   // ── coredce-generate-from-contract ───────────────────────────────────────
   if (name === 'coredce-generate-from-contract') {
@@ -944,16 +1232,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       contractPathOrUrl,
       force = false,
       only,
+      frontPath,
+      featureName,
     } = args as {
       proyectoPath: string;
       contractPathOrUrl: string;
       force?: boolean;
       only?: string;
+      frontPath?: string;
+      featureName?: string;
     };
 
     try {
       const resultado = await coredceGenerateFromContractTool.execute({
-        context: { proyectoPath, contractPathOrUrl, force, only },
+        context: {
+          proyectoPath,
+          contractPathOrUrl,
+          force,
+          only,
+          frontPath,
+          featureName,
+        },
       });
 
       // Devolver resultado como texto JSON para que Copilot lo muestre

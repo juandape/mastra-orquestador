@@ -75,15 +75,18 @@ El agente te guiará paso a paso:
                            ▼
 ┌──────────────────────────────────────────────────────────────┐
 │              MCP Server  (src/mcp-server.ts)                  │
-│  10 herramientas: analizar · buscar · leer · listar ·         │
-│  tests · standards · audit · escribir · sesión · limpiar      │
+│  14 herramientas: analizar · buscar · leer · listar ·         │
+│  tests · standards · audit · escribir · sesión · limpiar ·   │
+│  invoke-http · coredce-generate · interest-account (×3)       │
 └──────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────┐
 │           Agentes Mastra  (src/mastra/agents/)                │
 │  Solo se activan cuando hay un modelo IA en .env              │
-│  7 agentes: mediador · análisis · historias · pantallas ·     │
-│             tests · integraciones · sonarqube                 │
+│  12 agentes: mediador · análisis · historias · pantallas ·    │
+│              tests · integraciones · sonarqube ·              │
+│              coredce · coredce-entities · coredce-repos ·     │
+│              interest-account · blupersonas-integration       │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -347,104 +350,120 @@ Cuando dices "usa el `<agente>`" en el chat, le indicas a Copilot qué **modo de
 y qué **instrucciones específicas** aplicar. Copilot usa las tools MCP disponibles según
 el contexto de cada agente.
 
-| Agente                 | Para qué sirve                                            | Tools MCP que usa principalmente                              |
-| ---------------------- | --------------------------------------------------------- | ------------------------------------------------------------- |
-| `mediador-agente`      | Coordinador general — flujo completo de extremo a extremo | Todas                                                         |
-| `analisis-agente`      | Solo analizar la estructura de un proyecto                | `analizar-proyecto`, `buscar-en-codigo`, `ejecutar-standards` |
-| `historias-agente`     | Mejorar o desglosar una historia de usuario               | `leer-archivo`, `listar-directorio`                           |
-| `pantallas-agente`     | Solo generar componentes de pantallas                     | `analizar-proyecto`, `leer-archivo`, `escribir-archivo`       |
-| `tests-agente`         | Generar tests y verificar cobertura                       | `ejecutar-tests`, `leer-archivo`, `escribir-archivo`          |
-| `integraciones-agente` | Configurar analytics (Katalon, AppsFlyer, GA)             | `buscar-en-codigo`, `leer-archivo`, `escribir-archivo`        |
-| `sonarqube-agente`     | Revisar seguridad y calidad del código                    | `npm-audit`, `buscar-en-codigo`                               |
+| Agente                           | Para qué sirve                                                    | Tools MCP que usa principalmente                              |
+| -------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------- |
+| `mediador-agente`                | Coordinador general — flujo completo de extremo a extremo         | Todas                                                         |
+| `analisis-agente`                | Solo analizar la estructura de un proyecto                        | `analizar-proyecto`, `buscar-en-codigo`, `ejecutar-standards` |
+| `historias-agente`               | Mejorar o desglosar una historia de usuario                       | `leer-archivo`, `listar-directorio`                           |
+| `pantallas-agente`               | Solo generar componentes de pantallas                             | `analizar-proyecto`, `leer-archivo`, `escribir-archivo`       |
+| `tests-agente`                   | Generar tests y verificar cobertura                               | `ejecutar-tests`, `leer-archivo`, `escribir-archivo`          |
+| `integraciones-agente`           | Configurar analytics (Katalon, AppsFlyer, GA)                     | `buscar-en-codigo`, `leer-archivo`, `escribir-archivo`        |
+| `sonarqube-agente`               | Revisar seguridad y calidad del código                            | `npm-audit`, `buscar-en-codigo`                               |
+| `coredce-agente`                 | Generar estructura CoreDCE completa desde un contrato OpenAPI     | `coredce-generate-from-contract`, `escribir-archivo`          |
+| `coredce-entities-agente`        | Solo generar entidades y interfaces de CoreDCE                    | `coredce-generate-from-contract`                              |
+| `coredce-repos-agente`           | Solo generar repositorios e implementaciones de CoreDCE           | `coredce-generate-from-contract`                              |
+| `interest-account-agente`        | Integrar endpoints de InterestAccount (CoreDCE ↔ Front)           | `invoke-http-endpoint`, interest-account tools                |
+| `blupersonas-integration-agente` | Orquestador genérico CoreDCE ↔ BluPersonasApp (cualquier feature) | `coredce-generate-from-contract`, `invoke-http-endpoint`      |
 
-**Nuevo: Generador CoreDCE**
+**Generador CoreDCE + Mutación del front (genérico)**
 
-Este repositorio incluye ahora un agente y una tool para generar la estructura mínima CoreDCE a partir de un contrato OpenAPI/JSON proporcionado por el backend.
+El agente `@coredce` genera la estructura mínima CoreDCE a partir de un contrato OpenAPI/JSON para **cualquier integración nueva** — no solo InterestAccount. Ahora también genera automáticamente el archivo de mutación del front (BluPersonasApp) siguiendo el patrón genérico.
 
-- Palabra clave para activar: `@coredce` (en el chat de Copilot o dentro del flujo del `mediador-agente`).
-- Tool MCP: `coredce-generate-from-contract` — acepta `{ proyectoPath, contractPathOrUrl, force }`.
-- Agente: `coredce-agente` — flujo interactivo que pregunta por la ruta del contrato, la ruta del proyecto y si forzar sobrescritura.
+- Palabra clave: `@coredce` (chat de Copilot o flujo del `mediador-agente`).
+- Tool MCP: `coredce-generate-from-contract` — acepta `{ proyectoPath, contractPathOrUrl, force, only, frontPath, featureName }`.
+- Agente: `coredce-agente` — flujo interactivo que pregunta ruta del contrato, ruta CoreDCE, nombre de feature, y si generar la mutación del front.
 
-Qué genera:
+Qué genera en **CoreDCE** (`proyectoPath`):
 
-- `src/core/domain/entities/{resource}.ts` (tipos Request/Response básicos con TODOs para mapear campos)
-- `src/core/domain/interfaces/{resource}.interface.ts` (interfaz del repositorio)
-- `src/core/infraestructure/repositories/{resource}.repositoryImp.ts` (implementación que llama a `sendRequest`)
-- `src/core/infraestructure/controllers/{resource}.controller.ts` (wrapper/controller básico)
+| Archivo                                                             | Descripción                                           |
+| ------------------------------------------------------------------- | ----------------------------------------------------- |
+| `src/core/domain/entities/{resource}.ts`                            | Tipos `Request`/`Response` con TODOs para mapear      |
+| `src/core/domain/interfaces/{resource}.interface.ts`                | Interfaz del repositorio (`AsyncApiResponse<T>`)      |
+| `src/core/infraestructure/repositories/{resource}.repositoryImp.ts` | Implementación que llama a `sendRequest`              |
+| `src/core/infraestructure/controllers/{resource}.controller.ts`     | Clase estática con método `execute` y manejo de error |
+
+Qué genera en el **front** (`frontPath` + `featureName`, opcional):
+
+| Archivo                                   | Descripción                                                              |
+| ----------------------------------------- | ------------------------------------------------------------------------ |
+| `src/mutations/{featureName}.mutation.ts` | Hook genérico con `createQuery` (GET) o `createMutation` (POST/PUT/etc.) |
+
+**Patrón genérico de mutaciones del front** — aplica a CUALQUIER integración nueva:
+
+```typescript
+// src/mutations/{featureName}.mutation.ts
+import { createQuery, createMutation } from '@Mutations/mutationCore.mutation'
+import {
+  ApiResponse,
+  FeatureController,       // exportado por @dcefront/coredce después de publicar
+  KEYS_FEATURE,            // si está disponible en el paquete
+  FeatureRequest,
+  FeatureResponse,
+} from '@dcefront/coredce'  // ← SIEMPRE desde aquí, NUNCA desde node_modules directos
+
+const featureMutation = () => ({
+  // GET → createQuery  (auto-fetch al montar la pantalla)
+  getData: createQuery<FeatureRequest, ApiResponse<FeatureResponse>>(
+    KEYS_FEATURE.dataKey,
+    FeatureController.getData
+  ),
+  // POST/PUT/DELETE → createMutation  (on-demand)
+  saveData: createMutation<FeatureSaveRequest, ApiResponse<FeatureSaveResponse>>(
+    FeatureController.saveData
+  ),
+})
+export default featureMutation
+```
+
+Luego exportar en `src/mutations/index.ts`:
+
+```typescript
+export { default as featureMutation } from './feature.mutation'
+```
 
 Modo de uso (Copilot / VS Code):
-
-1. Abre el workspace con `mastra-orquestador` y tu proyecto CoreDCE en la misma ventana.
-2. En el chat de Copilot en modo Agent escribe, por ejemplo:
 
 ```
 @coredce
 contrato: ./specs/customer-api.json
 proyecto: /ruta/al/BluCoreDCE
+front: /ruta/al/BluPersonasApp
+feature: customerApi
 forzar: no
 ```
 
-3. Copilot invocará la tool y te devolverá la lista de archivos creados o propuestos en `_staging/`.
+Si solo quieres una parte, usa el parámetro `only`:
 
-Modo autónomo (modelo externo):
-
-1. Configura `.env` con tu proveedor (`AI_PROVIDER`, `AI_MODEL`, `API_KEY`).
-2. Usa el `coredce-agente` directamente (preguntará interactivamente). El flujo es idéntico al de Copilot.
-
-Notas finales:
-
-- Los archivos generados tienen `TODO` que deben completarse (tipos precisos, validaciones, mapeos). Revísalos antes de integrar en producción.
-- El comportamiento por defecto es prudente: no sobreescribe archivos existentes sin confirmación.
-
-> **Nota sobre SonarQube:** La ejecución de `sonar-scanner` (análisis completo) requiere
-> que los agentes Mastra tengan modelo externo configurado en `.env`. Con solo Copilot,
-> el `sonarqube-agente` puede revisar patrones problemáticos y ejecutar `npm-audit`,
-> pero no lanza el servidor de SonarQube.
-
-### Ejemplos concretos (servicios InterestAccount)
-
-Se añadieron ejemplos reales de servicios que el generador puede crear automáticamente desde un contrato o muestras JSON. Ejemplos implementados en BluCoreDCE:
-
-- `POST /api/cbf-loandepo-interest-account/v0/payment-history`
-  - Request mínimo:
-
-```json
-{
-   "savingsAccountFacility": {
-      "accountReference": { "accountIdentification": "1234567890" }
-   }
-}
+```
+@coredce-entities  → solo entidades e interfaces
+@coredce-repos     → solo repositorios e implementaciones
 ```
 
-- Response (simplificada):
+> **Nota:** Los archivos generados tienen `TODO` que deben completarse con los tipos exactos del contrato. El front solo puede importar desde `@dcefront/coredce` **después** de publicar el paquete.
 
-```json
-{
-   "savingsAccountFacility": {
-      "interest": {
-         "paymentHistory": { "paymentDate": "2026-01-01", "paidAmount": 100, "narrative": "payment", "currency": "USD" }
-      }
-   }
-}
+**Integrador genérico CoreDCE ↔ Front (`@blupersonas-integrate`)**
+
+Para cualquier integración nueva (no solo InterestAccount):
+
+```
+@blupersonas-integrate
+acción: generar-core
+contrato: ./specs/nueva-feature.json
+proyecto: /ruta/BluCoreDCE
+front: /ruta/BluPersonasApp
+feature: nuevaFeature
 ```
 
-- `POST /api/cbf-loandepo-interest-account/v0/amount-range-projection`
-  - Request: igual que el ejemplo anterior.
-  - Response: incluye `interestRateReference` con `monthlyInterest`, `intervals`, `minimumInterest`/`maximumInterest`.
+El agente genera CoreDCE + mutación del front y entrega el checklist de pasos siguientes.
 
-- `POST /api/cbf-loandepo-interest-account/v0/accrued-detail`
-  - Request: igual que el ejemplo anterior.
-  - Response: `interestRateReference` con rangos: `interestRateRange10k`, `interestRateRange50k`, `interestRateRange100k`, `interestRateRange200k`, `interestRateRange2m`, `interestRateRangeOver2m`.
+**Verificar endpoints directamente (`invoke-http-endpoint`)**
 
-Flujo recomendado tras generar:
+Sin necesidad de modelo IA, puedes invocar cualquier endpoint desde el chat:
 
-1. Ejecuta `@coredce` y proporciona la ruta del contrato (o un JSON mínimo) y la ruta del proyecto CoreDCE.
-2. Revisa los archivos generados en `_staging/` si aplicó, o los creados directamente.
-3. Para validar los tests y la cobertura, ejecuta el agente de pruebas desde el chat: `tests-agente` (o usa la herramienta `ejecutar-tests` con el patrón correspondiente).
-
-Estos ejemplos ya tienen implementaciones de plantilla y tests unitarios en BluCoreDCE como punto de partida; siempre revisa y adapta los TODOs y tipos generados antes de integrar a producción.
-
-> Consejo: Si sólo quieres generar las entidades o los repositorios, usa las palabras claves `@coredce-entities` y `@coredce-repos` respectivamente.
+```
+Usa la tool invoke-http-endpoint para probar el endpoint POST /api/mi-feature
+con apiBaseUrl: http://localhost:3000 y body: { "id": "123" }
+```
 
 #### Ejemplos de uso directo por agente
 
@@ -474,23 +493,200 @@ Usa el sonarqube-agente para revisar vulnerabilidades en /ruta/a/mi-proyecto
 
 ---
 
-## Herramientas MCP disponibles (referencia técnica)
+## Guía rápida — Cómo usar las tools desde el chat de Copilot
 
-Estas son las 10 tools que el servidor MCP expone a GitHub Copilot. Copilot las llama
+> Modo requerido: **Agent** (`Cmd + Shift + I` → selector de modo → "Agent")
+
+### Flujo 1 — Historia de usuario + imagen de Figma → pantallas
+
+El caso de uso más común: tienes una historia de usuario (y opcionalmente una imagen de Figma) y quieres que Copilot genere los componentes en tu proyecto.
+
+**Paso 1 — Inicia el flujo guiado (recomendado):**
+
+```
+@orquestar
+```
+
+Copilot te preguntará en orden:
+
+1. Historia de usuario (pégala en texto libre, JSON o Markdown)
+2. Imagen de Figma (ruta local, URL o imagen pegada directamente — escribe `omitir` si no tienes)
+3. Consideraciones adicionales (ruta del proyecto, carpeta destino — escribe `omitir` si no hay)
+
+Luego creará el plan y esperará tu aprobación antes de ejecutar.
+
+**Paso 2 — Alternativa directa (sin preguntas):**
+
+```
+Usa el mediador-agente con esta historia:
+"Como usuario quiero ver el resumen de mi cuenta de ahorros con saldo e historial"
+Imagen de referencia: /ruta/a/figma-screenshot.png
+Ruta del proyecto: /Users/juan.pena/Projects/Blu20/BluPersonasApp
+```
+
+**¿Qué hace Copilot internamente?**
+
+```
+→ analizar-proyecto    Lee dependencias, framework, i18n, analytics, carpeta de pantallas
+→ leer-archivo         Inspecciona componentes existentes para reutilizarlos
+→ buscar-en-codigo     Encuentra patrones de hooks, estilos y navegación del proyecto
+→ escribir-archivo     Crea los archivos en src/containers/ o src/screens/
+                       (si ya existe, lo guarda en _staging/ para revisión)
+→ ejecutar-standards   Verifica estándares de código del proyecto
+→ ejecutar-tests       Corre tests con cobertura (umbral ≥83%)
+```
+
+**Resultado esperado:**
+
+- `src/screens/<NombrePantalla>/index.tsx` — componente generado
+- `src/locales/<feature>Es.json` y `<feature>En.json` — traducciones (si el proyecto usa i18n)
+- `_staging/` — propuestas de cambios en archivos existentes (enums, hooks, navegación)
+
+---
+
+### Flujo 2 — Generar estructura CoreDCE desde un contrato
+
+Tienes un contrato OpenAPI/JSON del backend y quieres generar la estructura en BluCoreDCE **y** el archivo de mutación en BluPersonasApp.
+
+**En el chat de Copilot (modo Agent):**
+
+```
+Usa la tool coredce-generate-from-contract con estos parámetros:
+- proyectoPath: /Users/juan.pena/Projects/Blu20/BluCoreDCE
+- contractPathOrUrl: /ruta/al/contrato.json
+- frontPath: /Users/juan.pena/Projects/Blu20/BluPersonasApp
+- featureName: miNuevaFeature
+- force: false
+```
+
+O usando la palabra clave del agente:
+
+```
+@coredce
+contrato: /ruta/al/contrato.json
+proyecto: /Users/juan.pena/Projects/Blu20/BluCoreDCE
+front: /Users/juan.pena/Projects/Blu20/BluPersonasApp
+feature: miNuevaFeature
+forzar: no
+```
+
+**¿Qué genera?**
+
+En **BluCoreDCE** (`proyectoPath`):
+
+```
+src/core/domain/entities/mi-nueva-feature.ts            → Request + Response con TODOs
+src/core/domain/interfaces/mi-nueva-feature.interface.ts → Interfaz del repo
+src/core/infraestructure/repositories/mi-nueva-feature.repositoryImp.ts
+src/core/infraestructure/controllers/mi-nueva-feature.controller.ts
+```
+
+En **BluPersonasApp** (`frontPath`):
+
+```
+src/mutations/miNuevaFeature.mutation.ts  → Hook con createQuery/createMutation
+```
+
+El archivo de mutación generado sigue el patrón obligatorio del front:
+
+```typescript
+import { createQuery, createMutation } from '@Mutations/mutationCore.mutation'
+import {
+  ApiResponse,
+  MiNuevaFeatureController,   // exportado por @dcefront/coredce
+  KEYS_MI_NUEVA_FEATURE,
+  MiNuevaFeatureRequest,
+  MiNuevaFeatureResponse,
+} from '@dcefront/coredce'     // ← SIEMPRE desde aquí
+
+const miNuevaFeatureMutation = () => ({
+  // GET → createQuery (auto-fetch)
+  getData: createQuery<MiNuevaFeatureRequest, ApiResponse<MiNuevaFeatureResponse>>(
+    KEYS_MI_NUEVA_FEATURE.dataKey,
+    MiNuevaFeatureController.getData
+  ),
+  // POST → createMutation (on-demand)
+  saveData: createMutation<MiNuevaFeatureSaveRequest, ApiResponse<MiNuevaFeatureSaveResponse>>(
+    MiNuevaFeatureController.saveData
+  ),
+})
+export default miNuevaFeatureMutation
+```
+
+> Después de generar recuerda:
+>
+> 1. Completar los `TODO` en las entidades con los tipos exactos del contrato.
+> 2. Publicar el paquete `@dcefront/coredce` para que el front pueda importarlo.
+> 3. Agregar la exportación en `src/mutations/index.ts`:
+>    `export { default as miNuevaFeatureMutation } from './miNuevaFeature.mutation'`
+
+---
+
+### Flujo 3 — Verificar un endpoint directamente
+
+Sin modelo IA ni configuración extra:
+
+```
+Usa la tool invoke-http-endpoint:
+- apiBaseUrl: http://localhost:3000
+- path: /api/cbf-loandepo-interest-account/v0/payment-history
+- method: POST
+- body: { "savingsAccountFacility": { "accountReference": { "accountIdentification": "1234567890" } } }
+```
+
+---
+
+### Flujo 4 — Solo historia → Figma → CoreDCE + Front (flujo completo)
+
+Si quieres cubrir todo el ciclo desde la historia hasta los archivos listos:
+
+```
+Usa el blupersonas-integration-agente:
+acción: generar-core
+contrato: /ruta/al/contrato.json
+proyecto CoreDCE: /Users/juan.pena/Projects/Blu20/BluCoreDCE
+proyecto front: /Users/juan.pena/Projects/Blu20/BluPersonasApp
+feature: accountInterests
+```
+
+El agente genera la estructura CoreDCE, la mutación del front y entrega el checklist de pasos para completar la integración.
+
+Estas son las **14 tools** que el servidor MCP expone a GitHub Copilot. Copilot las llama
 automáticamente según lo que necesite — generalmente no tienes que invocarlas directo.
 
-| Tool                 | Ícono | Descripción                                                                          |
-| -------------------- | ----- | ------------------------------------------------------------------------------------ |
-| `analizar-proyecto`  | 🔍    | Lee `package.json` y `src/` — detecta framework, i18n, analytics, testing, gestor    |
-| `buscar-en-codigo`   | 🔎    | Grep en archivos JS/TS/JSX/TSX — útil para encontrar patrones reutilizables          |
-| `leer-archivo`       | 📄    | Lee uno o más archivos completos                                                     |
-| `listar-directorio`  | 📂    | Muestra el árbol de un directorio (sin `node_modules`/`build`/`dist`)                |
-| `ejecutar-tests`     | 🧪    | Corre Jest con cobertura. Informa si supera el umbral mínimo de 83%                  |
-| `ejecutar-standards` | 📐    | Ejecuta `yarn/npm/pnpm standards` según el gestor detectado; si no existe, lo indica |
-| `npm-audit`          | 🛡️    | Detecta vulnerabilidades con `yarn audit` o `npm audit`, clasificadas por severidad  |
-| `escribir-archivo`   | 💾    | Escribe un archivo. Si ya existe, lo guarda en `_staging/` en vez de sobreescribir   |
-| `resumen-sesion`     | 📊    | Muestra el estado de la memoria de sesión (proyectos activos y outputs almacenados)  |
-| `limpiar-contexto`   | 🗑️    | Limpia la memoria de sesión de un proyecto para empezar desde cero                   |
+### Tools de análisis y escritura
+
+| Tool                 | Ícono | Descripción                                                                         |
+| -------------------- | ----- | ----------------------------------------------------------------------------------- |
+| `analizar-proyecto`  | 🔍    | Lee `package.json` y `src/` — detecta framework, i18n, analytics, testing, gestor   |
+| `buscar-en-codigo`   | 🔎    | Grep en archivos JS/TS/JSX/TSX — útil para encontrar patrones reutilizables         |
+| `leer-archivo`       | 📄    | Lee uno o más archivos completos                                                    |
+| `listar-directorio`  | 📂    | Muestra el árbol de un directorio (sin `node_modules`/`build`/`dist`)               |
+| `ejecutar-tests`     | 🧪    | Corre Jest con cobertura. Informa si supera el umbral mínimo de 83%                 |
+| `ejecutar-standards` | 📐    | Ejecuta `yarn/npm standards` según el gestor detectado; si no existe, lo indica     |
+| `npm-audit`          | 🛡️    | Detecta vulnerabilidades con `yarn audit` o `npm audit`, clasificadas por severidad |
+| `escribir-archivo`   | 💾    | Escribe un archivo. Si ya existe, lo guarda en `_staging/` en vez de sobreescribir  |
+| `resumen-sesion`     | 📊    | Muestra el estado de la memoria de sesión (proyectos activos y outputs almacenados) |
+| `limpiar-contexto`   | 🗑️    | Limpia la memoria de sesión de un proyecto para empezar desde cero                  |
+
+### Tools de integración CoreDCE ↔ Front
+
+| Tool                                           | Ícono | Descripción                                                                                |
+| ---------------------------------------------- | ----- | ------------------------------------------------------------------------------------------ |
+| `coredce-generate-from-contract`               | 🏗️    | Genera entidades, repos, controllers en CoreDCE + archivo de mutación del front (genérico) |
+| `invoke-http-endpoint`                         | 🌐    | Realiza peticiones HTTP genéricas (GET/POST/PUT/PATCH/DELETE) sin necesidad de modelo IA   |
+| `interest-account-get-payment-history`         | 💰    | Llama al endpoint `POST /api/cbf-loandepo-interest-account/v0/payment-history`             |
+| `interest-account-get-amount-range-projection` | 📈    | Llama al endpoint `POST /api/cbf-loandepo-interest-account/v0/amount-range-projection`     |
+| `interest-account-get-accrued-detail`          | 🔢    | Llama al endpoint `POST /api/cbf-loandepo-interest-account/v0/accrued-detail`              |
+
+> **`coredce-generate-from-contract`** acepta los parámetros:
+>
+> - `proyectoPath` — ruta al repo CoreDCE
+> - `contractPathOrUrl` — archivo local o URL del contrato OpenAPI/JSON
+> - `force` — si `true`, sobreescribe con backup
+> - `only` — `entities` | `repos` | `controllers` | `all`
+> - `frontPath` _(opcional)_ — ruta de BluPersonasApp para generar el archivo de mutación del front
+> - `featureName` _(opcional)_ — nombre de la feature en camelCase (ej: `transfers`, `newFeature`)
 
 ---
 
@@ -498,26 +694,35 @@ automáticamente según lo que necesite — generalmente no tienes que invocarla
 
 ```
 src/
-├── mcp-server.ts             ← Servidor MCP (punto de entrada para Copilot)
+├── mcp-server.ts             ← Servidor MCP (punto de entrada para Copilot) — 14 tools
 ├── setup.ts                  ← Carga de variables de entorno (.env)
 └── mastra/
     ├── index.ts              ← Instancia Mastra (para uso autónomo con modelo externo)
+    ├── model.ts              ← Fábrica de modelos: openai · anthropic · google · groq · ollama
     ├── agents/
-    │   ├── index.ts          ← Barrel de agentes
-    │   ├── analisisAgente.ts ← Análisis + buscar + standards
+    │   ├── index.ts                        ← Barrel de agentes (12 exportados)
+    │   ├── analisisAgente.ts               ← Análisis + buscar + standards
     │   ├── historiasAgente.ts
     │   ├── integracionesAgente.ts
     │   ├── mediadorAgente.ts
     │   ├── pantallasAgente.ts
     │   ├── sonarqubeAgente.ts
-    │   └── testsAgente.ts
+    │   ├── testsAgente.ts
+    │   ├── coredceAgente.ts                ← Generador CoreDCE completo (+ mutación front)
+    │   ├── coredceEntitiesAgente.ts        ← Solo entidades e interfaces
+    │   ├── coredceReposAgente.ts           ← Solo repos e implementaciones
+    │   ├── interestAccountAgente.ts        ← Endpoints InterestAccount con patrón genérico
+    │   └── blupersonasIntegrationAgente.ts ← Orquestador CoreDCE ↔ Front (genérico)
     ├── tools/
-    │   ├── index.ts          ← Barrel de herramientas (usadas por agentes Mastra)
-    │   ├── proyectoTools.ts  ← analizarEstructura + buscarImplementaciones + ejecutarStandards
-    │   ├── pantallasTools.ts ← generarPantallas (detecta screens/, RN vs web, TS vs JS)
-    │   ├── testsTools.ts     ← ejecutarTests con cobertura
+    │   ├── index.ts              ← Barrel de herramientas (todas exportadas)
+    │   ├── proyectoTools.ts      ← analizarEstructura + buscarImplementaciones + ejecutarStandards
+    │   ├── pantallasTools.ts     ← generarPantallas (detecta screens/, RN vs web, TS vs JS)
+    │   ├── testsTools.ts         ← ejecutarTests con cobertura
     │   ├── integracionesTools.ts ← insertarTagsIntegracion (idempotente)
-    │   └── sonarqubeTools.ts ← ejecutarSonarScanner + ejecutarNpmAudit
+    │   ├── sonarqubeTools.ts     ← ejecutarSonarScanner + ejecutarNpmAudit
+    │   ├── coredceTools.ts       ← coredceGenerateFromContract (CoreDCE + mutación front genérica)
+    │   ├── httpTools.ts          ← invokeHttpEndpoint (HTTP genérico)
+    │   └── interestAccountTools.ts ← getPaymentHistory + getAmountRangeProjection + getAccruedDetail
     └── workflows/
         └── orquestadorWorkflow.ts
 ```
@@ -539,15 +744,20 @@ src/
 
 ## Arquitectura
 
-- **`src/mcp-server.ts`** — servidor MCP: expone las **10 tools** que usa GitHub Copilot
+- **`src/mcp-server.ts`** — servidor MCP: expone las **14 tools** que usa GitHub Copilot (10 de análisis/escritura + 4 de integración CoreDCE/HTTP)
 - **`src/setup.ts`** — carga las variables de entorno del `.env` antes de inicializar los agentes
-- **`src/mastra/agents`** — lógica de cada agente IA (usada en modo autónomo con modelo externo)
-- **`src/mastra/model.ts`** — fábrica de modelos: resuelve qué proveedor usar según el `.env`
+- **`src/mastra/agents`** — **12 agentes** IA (usados en modo autónomo con modelo externo)
+- **`src/mastra/model.ts`** — fábrica de modelos: resuelve qué proveedor usar según el `.env` (openai · anthropic · google · groq · ollama)
 - **`src/mastra/workflows`** — orquestación con `.step().then().commit()`
 - **`src/mastra/tools`** — adaptadores a sistemas externos (fs, execSync, axios) para los agentes Mastra
 
 > Las tools de `src/mastra/tools/` son exclusivas de los agentes Mastra. El MCP server
-> (`mcp-server.ts`) implementa su propia lógica de fs/execSync directamente, sin depender
-> de ellas. Esto permite que el MCP funcione sin inicializar Mastra ni requerir un modelo IA.
+> (`mcp-server.ts`) implementa su propia lógica directamente, sin depender de ellas.
+> Esto permite que el MCP funcione sin inicializar Mastra ni requerir un modelo IA.
 
 Para cambiar el flujo, edita `src/mastra/workflows/orquestadorWorkflow.ts`.
+
+> **Nota sobre SonarQube:** La ejecución de `sonar-scanner` (análisis completo) requiere
+> que los agentes Mastra tengan modelo externo configurado en `.env`. Con solo Copilot,
+> el `sonarqube-agente` puede revisar patrones problemáticos y ejecutar `npm-audit`,
+> pero no lanza el servidor de SonarQube.

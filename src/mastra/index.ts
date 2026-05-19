@@ -10,6 +10,8 @@ import { mediadorAgente } from './agents/mediadorAgente.js';
 import { coredceAgente } from './agents/coredceAgente.js';
 import { coredceEntitiesAgente } from './agents/coredceEntitiesAgente.js';
 import { coredceReposAgente } from './agents/coredceReposAgente.js';
+import { interestAccountAgente } from './agents/interestAccountAgente.js';
+import { blupersonasIntegrationAgente } from './agents/blupersonasIntegrationAgente.js';
 import { orquestadorWorkflow } from './workflows/orquestadorWorkflow.js';
 
 // Widened type annotation to avoid TS2742 (inferred type referencing internal dist files)
@@ -22,6 +24,8 @@ export const mastra: Mastra = new Mastra({
     'coredce-agente': coredceAgente,
     'coredce-entities-agente': coredceEntitiesAgente,
     'coredce-repos-agente': coredceReposAgente,
+    'interest-account-agente': interestAccountAgente,
+    'blupersonas-integration-agente': blupersonasIntegrationAgente,
     'integraciones-agente': integracionesAgente,
     'sonarqube-agente': sonarqubeAgente,
     'mediador-agente': mediadorAgente,
