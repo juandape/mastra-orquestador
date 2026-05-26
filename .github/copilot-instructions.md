@@ -61,37 +61,90 @@ Antes de escribir una sola línea de código, llama `analizar-proyecto` y extrae
 
 ## FLUJO CONVERSACIONAL — Palabra clave `@orquestar`
 
-Cuando el usuario escriba `@orquestar` en cualquier mensaje, **no ejecutes ninguna
-herramienta todavía**. Activa este flujo interactivo de 4 pasos:
+Cuando el usuario escriba `@orquestar`, inicia un flujo **interactivo paso a paso**.
+**No ejecutes ninguna herramienta todavía.** Haz una pregunta a la vez, espera la
+respuesta del usuario y avanza al siguiente paso. El usuario puede escribir `skip`
+para saltar cualquier paso opcional.
 
-### A — Solicitar historia de usuario
+### A — Paso 1: Historia de usuario (obligatorio)
 
-Responde **únicamente** esto:
+Responde **únicamente** con este mensaje:
 
-> "¡Listo! Cuéntame la historia de usuario que vamos a implementar.
-> Puedes pegarla en cualquier formato: texto libre, JSON, Markdown o criterios de aceptación."
+---
 
-### B — Solicitar imagen de referencia (opcional)
+¡Hola! Vamos a crear tu feature paso a paso 🚀
 
-Cuando el usuario responda con la historia, di:
+**Paso 1 de 4 — 📝 Historia de usuario**
 
-> "¿Tienes imagen de referencia (Figma, screenshot, wireframe)?
-> Puedes pegar la ruta, URL o imagen directamente.
-> Si no tienes, escribe `omitir`."
+Escribe o pega tu historia de usuario aquí.
+Puedes usar texto libre, JSON, Markdown, criterios de aceptación o una épica.
 
-### C — Solicitar consideraciones adicionales
+---
 
-Cuando el usuario responda (imagen u `omitir`), di:
+Espera la respuesta. Si el usuario envía texto vacío o solo espacios, vuelve a pedirla.
+Una vez recibida, guarda el valor y avanza al **Paso 2**.
 
-> "Por último, ¿alguna consideración adicional? Por ejemplo:
-> - **Ruta del proyecto** (obligatorio si no la mencionaste)
-> - Módulo o carpeta destino de los nuevos componentes
-> - Patrones o convenciones específicas a respetar
-> - Cualquier restricción o exclusión
->
-> Si no hay nada extra, escribe `omitir`."
+### A2 — Paso 2: Imagen de referencia (opcional)
 
-### D — Crear plan y pedir aprobación
+Responde **únicamente** con este mensaje:
+
+---
+
+**Paso 2 de 4 — 🖼️ Imagen de referencia** _(opcional — escribe `skip` para omitir)_
+
+Tienes dos opciones:
+
+- **Cmd+V / Ctrl+V** — Pega la imagen directamente aquí. Copilot la analizará visualmente.
+  Funciona con screenshots, capturas de Figma y fotos de wireframes.
+- **Ruta o URL** — Escribe la ruta local o URL de la imagen:
+  `/Users/juan/Desktop/figma.png` · `https://figma.com/file/abc123`
+
+---
+
+Espera la respuesta. Si el usuario pega una imagen adjunta, guárdala como imagen de referencia.
+Si escribe `skip`, `omitir`, `no` o similar, registra como "No proporcionada".
+Una vez recibida, guarda el valor y avanza al **Paso 3**.
+
+### A3 — Paso 3: Consideraciones adicionales (opcional)
+
+Responde **únicamente** con este mensaje:
+
+---
+
+**Paso 3 de 4 — 📐 Consideraciones adicionales** _(opcional — escribe `skip` para omitir)_
+
+¿Hay algo específico que deba tener en cuenta?
+Por ejemplo:
+
+- Carpeta destino: `src/containers/NombrePantalla/`
+- Reutilizar el componente `CustomButton`
+- No generar analytics por ahora
+- Seguir el patrón de la pantalla `LoginScreen`
+
+---
+
+Espera la respuesta. Si el usuario escribe `skip`, `omitir`, `no` o similar, registra como "Ninguna".
+Una vez recibida, guarda el valor y avanza al **Paso 4**.
+
+### A4 — Paso 4: Ruta del proyecto (obligatorio)
+
+Responde **únicamente** con este mensaje:
+
+---
+
+**Paso 4 de 4 — 📁 Ruta del proyecto** _(obligatorio)_
+
+Pega la ruta absoluta al proyecto donde debo generar el código.
+Ejemplo: `/Users/juan.pena/Projects/Blu20/BluPersonasApp`
+
+---
+
+Espera la respuesta. Si el usuario no proporciona una ruta válida (que empiece con `/` o letra de unidad),
+vuelve a pedirla. Una vez recibida, guarda el valor y procede al **Paso B**.
+
+### B — Crear plan con toda la información recopilada
+
+Con los 4 datos recopilados (HU, imagen, consideraciones, ruta):
 
 Con toda la información recopilada:
 
@@ -146,7 +199,7 @@ Con toda la información recopilada:
    > ¿Apruebas este plan y los pasos a seguir?
    > Responde **`aprobar`** para iniciar, o indícame qué cambiar."
 
-### E — Ejecutar con actualización del checklist
+### D — Ejecutar con actualización del checklist
 
 Solo cuando el usuario responda `aprobar`:
 

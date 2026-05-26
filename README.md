@@ -31,13 +31,14 @@ yarn doctor
 @orquestar
 ```
 
-El agente te guiará paso a paso:
+El agente te guiará paso a paso de forma interactiva:
 
-1. Te pedirá la **historia de usuario**
-2. Te pedirá una **imagen de referencia** (Figma/screenshot) — opcional
-3. Te pedirá **consideraciones adicionales** (ruta del proyecto, carpeta destino, etc.)
-4. Creará un archivo **`_plan_[Feature].md`** con el plan y checklist para tu aprobación
-5. Una vez apruebes con `aprobar`, ejecuta cada paso actualizando el checklist en tiempo real
+1. Pregunta la **historia de usuario** — responde en el chat
+2. Pregunta la **imagen de referencia** — pega con `Cmd+V` / `Ctrl+V`, escribe la ruta, o escribe `skip`
+3. Pregunta las **consideraciones adicionales** — escribe lo que necesites o `skip`
+4. Pregunta la **ruta del proyecto** — pega la ruta absoluta
+5. Crea un archivo **`_plan_[Feature].md`** con el plan y checklist para tu aprobación
+6. Una vez apruebes con `aprobar`, ejecuta cada paso actualizando el checklist en tiempo real
 
 > Funciona con **cualquier proyecto React**: BluPersonasApp, Next.js, Vite, CRA, Expo, etc.
 > El orquestador detecta el stack automáticamente. Si tiene i18n lo respeta, si no tiene lo omite.
@@ -272,33 +273,55 @@ Si no aparece o dice "Stopped":
 
 ### Paso 6 — Iniciar el flujo con `@orquestar`
 
-Ya tienes todo listo. Escribe en el chat simplemente:
+Ya tienes todo listo. Tienes tres formas de iniciar según tu preferencia:
+
+#### Opción A — Flujo interactivo (recomendado)
+
+Escribe `@orquestar` en el chat. El agente te hará **una pregunta a la vez**:
+
+| Paso | Qué pide                    | Obligatorio | Tip                                                |
+| ---- | --------------------------- | ----------- | -------------------------------------------------- |
+| 1/4  | Historia de usuario         | ✅          | Texto libre, JSON o Markdown                       |
+| 2/4  | Imagen de referencia        | ➖          | `Cmd+V` para pegar screenshot, ruta, URL, o `skip` |
+| 3/4  | Consideraciones adicionales | ➖          | Carpeta destino, patrones, o `skip`                |
+| 4/4  | Ruta del proyecto           | ✅          | Ruta absoluta, ej: `/Users/juan.pena/Projects/...` |
+
+Después de responder los 4 pasos, el agente crea el plan y espera tu `aprobar`.
+
+#### Opción B — Prompt file `/orquestar` (más rápido)
+
+Escribe `/orquestar` en el chat de Copilot (modo Agent). VS Code carga directamente
+el archivo [.github/prompts/orquestar.prompt.md](.github/prompts/orquestar.prompt.md)
+con el formulario ya estructurado. Edítalo en el input y envía.
+
+> Esta opción solo funciona con **GitHub Copilot en modo Agent**.
+
+#### Opción C — Texto libre directo
+
+Si ya tienes todo claro, envía todo en un solo mensaje sin formulario:
 
 ```
-@orquestar
+Usa el mediador-agente con esta historia:
+"Como usuario quiero ver el resumen de mi cuenta de ahorros con saldo e historial"
+Imagen de referencia: /ruta/a/figma-screenshot.png
+Ruta del proyecto: /Users/juan.pena/Projects/Blu20/BluPersonasApp
 ```
 
-El agente te guiará con preguntas en orden:
+---
 
-1. **Historia de usuario** — pégala en cualquier formato (texto libre, JSON, Markdown)
-2. **Imagen de referencia** — ruta, URL o imagen directa; escribe `omitir` si no tienes
-3. **Consideraciones adicionales** — ruta del proyecto, carpeta destino, convenciones; escribe `omitir` si no hay nada extra
+En todos los casos, una vez que el agente recibe la información:
 
-Una vez recopilada la info:
-
-4. El agente analiza el proyecto y crea el archivo **`_plan_[Feature].md`** en la raíz con:
+1. Analiza el proyecto y detecta el stack automáticamente
+2. Crea el archivo **`_plan_[Feature].md`** en la raíz del proyecto con:
    - Stack detectado · Historia · Imagen · Consideraciones
-   - Checklist de pasos (`- [ ] Paso 1 — Análisis`, `- [ ] Paso 2 — ...`)
-5. Te muestra el plan en el chat y espera tu **`aprobar`**
-6. Ejecuta cada fase marcando el checklist en vivo:
+   - Checklist de pasos a ejecutar
+3. Te muestra el plan en el chat y espera tu **`aprobar`**
+4. Ejecuta cada fase marcando el checklist en vivo:
    - `- [x] Paso N` — exitoso ✅
    - `- [!] Paso N` — error ❌ (con motivo)
    - `- [~] Paso N` — no aplica ➖
 
 > El archivo `_plan_[Feature].md` queda en tu proyecto como registro del trabajo.
-
-> **Flujo directo (sin pasos guiados):** si prefieres, puedes seguir usando el formato anterior:
-> `Usa el mediador-agente. Historia: [...] Ruta: /tu/proyecto`
 
 ---
 
@@ -507,11 +530,12 @@ El caso de uso más común: tienes una historia de usuario (y opcionalmente una 
 @orquestar
 ```
 
-Copilot te preguntará en orden:
+El agente te hace **una pregunta a la vez** en el chat:
 
-1. Historia de usuario (pégala en texto libre, JSON o Markdown)
-2. Imagen de Figma (ruta local, URL o imagen pegada directamente — escribe `omitir` si no tienes)
-3. Consideraciones adicionales (ruta del proyecto, carpeta destino — escribe `omitir` si no hay)
+1. **Historia de usuario** — responde en texto libre, JSON o Markdown
+2. **Imagen de referencia** — pega con `Cmd+V` / `Ctrl+V`, escribe la ruta/URL, o escribe `skip`
+3. **Consideraciones adicionales** — instrucciones extra, o `skip`
+4. **Ruta del proyecto** — ruta absoluta al proyecto
 
 Luego creará el plan y esperará tu aprobación antes de ejecutar.
 

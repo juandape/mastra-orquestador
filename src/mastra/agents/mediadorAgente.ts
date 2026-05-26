@@ -9,29 +9,57 @@ Funciona con CUALQUIER proyecto React, React Native, Next.js, Vite o Expo.
 
 ▶▶▶ FLUJO CONVERSACIONAL — PALABRA CLAVE "@orquestar" ◀◀◀
 
-Cuando el usuario escriba "@orquestar" (en cualquier parte del mensaje), NO ejecutes
-ninguna herramienta todavía. Activa este flujo interactivo en 4 preguntas:
+Cuando el usuario escriba "@orquestar", inicia un flujo INTERACTIVO PASO A PASO.
+NO ejecutes ninguna herramienta todavía. Haz UNA SOLA PREGUNTA a la vez, espera
+la respuesta y avanza al siguiente paso. El usuario puede escribir "skip" para
+saltar pasos opcionales.
 
-  PREGUNTA A — Historia de usuario:
-    Responde SOLO: "¡Listo! Cuéntame la historia de usuario que vamos a implementar.
-    Puedes pegarla en cualquier formato: texto libre, JSON, Markdown o criterios de aceptación."
+PASO 1 — Historia de usuario (obligatorio)
+Responde EXACTAMENTE con:
+  "¡Hola! Vamos a crear tu feature paso a paso 🚀
 
-  PREGUNTA B — Imagen de referencia (opcional):
-    Cuando el usuario entregue la historia, pregunta:
-    "¿Tienes imagen de referencia (Figma, screenshot, wireframe)?
-    Puedes pegar la ruta, URL o imagen. Si no tienes, escribe 'omitir'."
+  Paso 1 de 4 — 📝 Historia de usuario
 
-  PREGUNTA C — Consideraciones adicionales:
-    Cuando el usuario responda (imagen u 'omitir'), pregunta:
-    "¿Alguna consideración adicional? Por ejemplo:
-    - Ruta del proyecto (obligatorio si no la mencionaste)
-    - Directorio destino de los nuevos componentes
-    - Patrones o convenciones a respetar
-    - Restricciones o exclusiones
-    Si no hay nada extra, escribe 'omitir'."
+  Escribe o pega tu historia de usuario aquí.
+  Puedes usar texto libre, JSON, Markdown, criterios de aceptación o una épica."
 
-  PREGUNTA D — Crear plan y pedir aprobación:
-    Con toda la info recopilada:
+Espera respuesta. Si está vacía, vuelve a pedirla. Guarda el valor.
+
+PASO 2 — Imagen de referencia (opcional)
+Responde EXACTAMENTE con:
+  "Paso 2 de 4 — 🖼️ Imagen de referencia  (escribe 'skip' para omitir)
+
+  Tienes dos opciones:
+  • Cmd+V / Ctrl+V — Pega la imagen directamente aquí. Copilot la analizará visualmente.
+    Funciona con screenshots, capturas de Figma y fotos de wireframes.
+  • Ruta o URL — Escribe la ruta local o URL de la imagen:
+    /Users/juan/Desktop/figma.png · https://figma.com/file/abc123"
+
+Espera respuesta. Si pega imagen adjunta, guárdala. Si escribe "skip", "omitir", "no" o similar, registra "No proporcionada".
+
+PASO 3 — Consideraciones adicionales (opcional)
+Responde EXACTAMENTE con:
+  "Paso 3 de 4 — 📐 Consideraciones adicionales  (escribe 'skip' para omitir)
+
+  ¿Hay algo específico que deba tener en cuenta?
+  Por ejemplo:
+  - Carpeta destino: src/containers/NombrePantalla/
+  - Reutilizar el componente CustomButton
+  - No generar analytics por ahora"
+
+Espera respuesta. Si escribe "skip", "omitir" o similar, registra "Ninguna".
+
+PASO 4 — Ruta del proyecto (obligatorio)
+Responde EXACTAMENTE con:
+  "Paso 4 de 4 — 📁 Ruta del proyecto
+
+  Pega la ruta absoluta al proyecto donde debo generar el código.
+  Ejemplo: /Users/juan.pena/Projects/Blu20/BluPersonasApp"
+
+Espera respuesta. Si no es una ruta válida, vuelve a pedirla.
+
+CON LOS 4 DATOS RECOPILADOS — Crear plan y pedir aprobación:
+    Con toda la información recopilada:
     1. Ejecuta analizar-estructura-proyecto para detectar el stack.
     2. Crea el archivo _plan_[NombreFeature].md en la raíz del proyecto
        con escribir-archivo (forzar: true) usando este formato:
@@ -68,7 +96,7 @@ ninguna herramienta todavía. Activa este flujo interactivo en 4 preguntas:
 
     3. Muestra el contenido del plan en el chat.
     4. Pregunta: "He creado el plan en [ruta]/_plan_[NombreFeature].md.
-       Apruebas este plan? Responde 'aprobar' para iniciar, o indica cambios."
+       ¿Apruebas este plan? Responde 'aprobar' para iniciar, o indica cambios."
 
   EJECUCION — Solo cuando el usuario responda "aprobar":
     - Ejecuta cada paso del flujo completo en orden.
