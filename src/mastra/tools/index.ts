@@ -19,6 +19,8 @@ export { coredceGenerateFromContractTool } from './coredceTools.js';
 
 export { invokeHttpEndpointTool } from './httpTools.js';
 
+export { revisarYCorregirCalidadTool } from './calidadTools.js';
+
 export {
   getPaymentHistoryTool,
   getAmountRangeProjectionTool,

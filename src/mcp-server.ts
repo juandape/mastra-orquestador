@@ -45,6 +45,7 @@ import {
   getAccruedDetailTool,
 } from './mastra/tools/interestAccountTools.js';
 import { invokeHttpEndpointTool } from './mastra/tools/httpTools.js';
+import { revisarYCorregirCalidadTool } from './mastra/tools/calidadTools.js';
 
 // ── Helpers internos ──────────────────────────────────────────────────────────
 
@@ -376,6 +377,33 @@ const HERRAMIENTAS = [
         },
       },
       required: ['apiBaseUrl', 'path'],
+    },
+  },
+  {
+    name: 'revisar-y-corregir-calidad',
+    description:
+      '🔧 Ejecuta en secuencia: yarn standards, typecheck (tsc), eslint con --fix y (opcionalmente) yarn test. ' +
+      'Devuelve errores detallados de cada paso para que el agente los corrija. ' +
+      'ESLint auto-corrige lo que puede. Usa incluirTests=true para ejecutar también los tests.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        proyectoPath: {
+          type: 'string',
+          description: 'Ruta absoluta al directorio raíz del proyecto',
+        },
+        incluirTests: {
+          type: 'boolean',
+          description:
+            'Si true, ejecuta yarn test con cobertura. Default: false.',
+        },
+        testPattern: {
+          type: 'string',
+          description:
+            '(Opcional) Patrón para filtrar tests. Solo aplica si incluirTests=true.',
+        },
+      },
+      required: ['proyectoPath'],
     },
   },
   {
@@ -1219,6 +1247,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           {
             type: 'text' as const,
             text: `❌ Error en interest-account-get-accrued-detail: ${msg}`,
+          },
+        ],
+      };
+    }
+  }
+
+  // ── revisar-y-corregir-calidad ─────────────────────────────────────────────
+  if (name === 'revisar-y-corregir-calidad') {
+    const {
+      proyectoPath,
+      incluirTests = false,
+      testPattern,
+    } = args as {
+      proyectoPath: string;
+      incluirTests?: boolean;
+      testPattern?: string;
+    };
+    try {
+      const resultado = await revisarYCorregirCalidadTool.execute({
+        context: { proyectoPath, incluirTests, testPattern },
+      });
+      return {
+        content: [
+          { type: 'text' as const, text: JSON.stringify(resultado, null, 2) },
+        ],
+      };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text' as const,
+            text: `❌ Error en revisar-y-corregir-calidad: ${msg}`,
           },
         ],
       };
